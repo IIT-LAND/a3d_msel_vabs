@@ -1,0 +1,231 @@
+---
+title: "ARI enrichment analysis"
+author: "Michael Lombardo"
+date: "13/10/2023"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r, warning=FALSE, message=FALSE}
+library(easypackages)
+libraries("here","tidyverse")
+
+# make genelistOverlap function
+genelistOverlap <- function(list1,
+                            list2,
+                            backgroundTotal,
+                            print_result = TRUE, 
+                            header = FALSE) {
+	
+	# Read in libraries and set options
+	options(stringsAsFactors = FALSE)
+	require(readxl)
+	require(tools)
+  
+  if (is.character(list1)){
+    # get the file extension of list1
+    ext1 = file_ext(list1)
+    
+    if (is.element(ext1,c("xlsx","xls","txt","csv"))){
+      if (ext1=="xlsx" | ext1=="xls") {
+        genes1 = read_excel(list1)
+      } else if (ext1=="txt") {
+        genes1 = read.delim(list1, header = header)
+      } else if (ext1=="csv") {
+        genes1 = read.csv(list1, header = header)
+      }# if (ext1=="xlsx" | ext1=="xls") {
+    } else {
+      genes1 = data.frame(list1)
+    }# if (is.element(ext1,c("xlsx","xls","txt","csv"))){
+  } else if (is.data.frame(list1)){
+    genes1 = list1
+  }# if (is.character(list1)){
+  
+  if (is.character(list2)){
+    # get the file extension of list1
+    ext2 = file_ext(list2)
+    
+    if (is.element(ext2,c("xlsx","xls","txt","csv"))){
+      if (ext2=="xlsx" | ext2=="xls") {
+        genes2 = read_excel(list2)
+      } else if (ext2=="txt") {
+        genes2 = read.delim(list2, header = header)
+      } else if (ext1=="csv") {
+        genes2 = read.csv(list2, header = header)
+      }# if (ext1=="xlsx" | ext1=="xls") {
+    } else {
+      genes2 = data.frame(list2)
+    }# if (is.element(ext1,c("xlsx","xls","txt","csv"))){
+  } else if (is.data.frame(list2)){
+    genes2 = list2
+  }# if (is.character(list2)){
+  
+	# Find overlapping genes
+	gene_mask = is.element(genes1[,1],genes2[,1])
+	overlapping_genes = genes1[gene_mask,1]
+	gene_overlap = sum(gene_mask)
+	ngenes1 = length(genes1[,1])
+	ngenes2 = length(genes2[,1])
+
+	# Calculate odds ratio
+	A = gene_overlap;
+	B = ngenes1-gene_overlap
+	if (ngenes2==gene_overlap){
+	  # add 0.5 to ngenes2 to avoid OR = Inf
+	  C = (ngenes2+0.5)-gene_overlap
+	} else {
+	  C = ngenes2-gene_overlap
+	}
+	D = backgroundTotal-C
+	OR = (A*D)/(B*C)
+
+	# Calculate p-value from hypergeometric test
+	hypergeo_p = sum(dhyper(gene_overlap:ngenes2,ngenes1,backgroundTotal-ngenes1,ngenes2))
+
+	# pack into result
+	result = vector(mode = "list", length = 1)
+	result[[1]]$list1 = list1
+	result[[1]]$list2 = list2
+	result[[1]]$backgroundTotal = backgroundTotal
+	result[[1]]$OR = OR
+	result[[1]]$hypergeo_p = hypergeo_p
+	result[[1]]$percent_overlap_list1 = gene_overlap/ngenes1
+	result[[1]]$percent_overlap_list2 = gene_overlap/ngenes2
+	result[[1]]$gene_overlap = gene_overlap
+	result[[1]]$ngenes1 = ngenes1
+	result[[1]]$ngenes2 = ngenes2
+	result[[1]]$overlapping_genes = overlapping_genes
+
+	# print result to the screen and then return result
+	if (print_result){
+	  print(sprintf("OR = %f, p = %f",OR,hypergeo_p))
+	}
+	return(result)
+} # function genelistOverlap 
+
+```
+
+Overlap with Lombardo et al., 2018, Nature Neuroscience
+
+```{r, warning=FALSE, message=FALSE}
+bglist = read.csv(here("data","bglist_lombardo_2018_natneurosci.csv"))
+bglist = as.character(unique(bglist$x))
+backgroundTotal = length(bglist)
+
+gandal_data = read.csv(here("data","gandal_2022_nature_arigenes.csv"))
+ari_genes = unique(gandal_data$external_gene_name)
+mask = is.element(ari_genes, bglist)
+ari_genes = ari_genes[mask]
+
+natneurosci_data = read.csv(here("data","lombardo_2018_natneurosci_nonzeromodgenes.csv"))
+nz_genes = as.character(unique(natneurosci_data$x))
+
+overlap_res_elo = genelistOverlap(nz_genes, ari_genes, backgroundTotal, print_result=TRUE,header=FALSE)
+
+
+wgcna_res = read.csv(here("pls","data","fmri","wgcna_results_summary.csv"))
+nz_mods = c(17,15,13,21,11,18,2,1,20)
+mask = is.element(wgcna_res$moduleLabels, nz_mods)
+nz_genes = as.character(unique(wgcna_res$geneSymbol[mask]))
+
+overlap_res_a3d = genelistOverlap(nz_genes, ari_genes, backgroundTotal, print_result=TRUE,header=FALSE)
+
+# insert values into the heatmap matrix
+colnames2use = c("ELO_OR","A3D_OR","ELO_pval","A3D_pval")
+rownames2use = c("fmri_lv1","sa_normative","ct_normative","atypical")
+data4hmap = data.frame(matrix(nrow = length(rownames2use), ncol = length(colnames2use)))
+colnames(data4hmap) = colnames2use
+rownames(data4hmap) = rownames2use
+
+data4hmap["fmri_lv1","ELO_OR"] = overlap_res_elo[[1]]$OR
+data4hmap["fmri_lv1","ELO_pval"] = overlap_res_elo[[1]]$hypergeo_p
+data4hmap["fmri_lv1","A3D_OR"] = overlap_res_a3d[[1]]$OR
+data4hmap["fmri_lv1","A3D_pval"] = overlap_res_a3d[[1]]$hypergeo_p
+```
+
+Overlap with Lombardo et al., 2021, Science Advances
+
+```{r, warning=FALSE, message=FALSE}
+bglist = read.csv(here("data","bglist_lombardo_2021_sciadv.csv"))
+bglist = as.character(unique(bglist$x))
+backgroundTotal = length(bglist)
+
+gandal_data = read.csv(here("data","gandal_2022_nature_arigenes.csv"))
+ari_genes = unique(gandal_data$external_gene_name)
+mask = is.element(ari_genes, bglist)
+ari_genes = ari_genes[mask]
+
+sciadv_data = read.csv(here("data","lombardo_2021_sciadv_nonzeromodgenes.csv"))
+sa_lv1_nz_genes = as.character(unique(sciadv_data$SA_LV1))
+ct_lv1_nz_genes = as.character(unique(sciadv_data$CT_LV1))
+ct_lv2_nz_genes = as.character(unique(sciadv_data$CT_LV2))
+
+overlap_res = genelistOverlap(sa_lv1_nz_genes, ari_genes, backgroundTotal, print_result=TRUE,header=FALSE)
+data4hmap["sa_normative","ELO_OR"] = overlap_res[[1]]$OR
+data4hmap["sa_normative","ELO_pval"] = overlap_res[[1]]$hypergeo_p
+
+overlap_res = genelistOverlap(ct_lv1_nz_genes, ari_genes, backgroundTotal, print_result=TRUE,header=FALSE)
+data4hmap["ct_normative","ELO_OR"] = overlap_res[[1]]$OR
+data4hmap["ct_normative","ELO_pval"] = overlap_res[[1]]$hypergeo_p
+
+overlap_res = genelistOverlap(ct_lv2_nz_genes, ari_genes, backgroundTotal, print_result=TRUE,header=FALSE)
+data4hmap["atypical","ELO_OR"] = overlap_res[[1]]$OR
+data4hmap["atypical","ELO_pval"] = overlap_res[[1]]$hypergeo_p
+
+
+wgcna_res = read.csv(here("pls","data","smri","wgcna_results_summary.csv"))
+nz_mods = c(15,5,19,14)
+mask = is.element(wgcna_res$moduleLabels, nz_mods)
+sa_lv1_nz_genes = as.character(unique(wgcna_res$geneSymbol[mask]))
+
+nz_mods = c(13,2,16,21,4,10,6,7,11,14,12,18,1)
+mask = is.element(wgcna_res$moduleLabels, nz_mods)
+sa_lv2_nz_genes = as.character(unique(wgcna_res$geneSymbol[mask]))
+
+nz_mods = c(13,2,16,21,4,10,6,7,20,3,5,12,9,1)
+mask = is.element(wgcna_res$moduleLabels, nz_mods)
+ct_lv1_nz_genes = as.character(unique(wgcna_res$geneSymbol[mask]))
+
+overlap_res = genelistOverlap(sa_lv1_nz_genes, ari_genes, backgroundTotal, print_result=TRUE,header=FALSE)
+data4hmap["atypical","A3D_OR"] = overlap_res[[1]]$OR
+data4hmap["atypical","A3D_pval"] = overlap_res[[1]]$hypergeo_p
+
+overlap_res = genelistOverlap(sa_lv2_nz_genes, ari_genes, backgroundTotal, print_result=TRUE,header=FALSE)
+data4hmap["sa_normative","A3D_OR"] = overlap_res[[1]]$OR
+data4hmap["sa_normative","A3D_pval"] = overlap_res[[1]]$hypergeo_p
+
+overlap_res = genelistOverlap(ct_lv1_nz_genes, ari_genes, backgroundTotal, print_result=TRUE,header=FALSE)
+data4hmap["ct_normative","A3D_OR"] = overlap_res[[1]]$OR
+data4hmap["ct_normative","A3D_pval"] = overlap_res[[1]]$hypergeo_p
+```
+
+# plot heatmap
+
+```{r, warning=FALSE, message=FALSE}
+data4hmap$type = rownames(data4hmap)
+data4hmap$type = factor(data4hmap$type,levels = c("fmri_lv1","sa_normative","ct_normative","atypical"))
+# data4hmap$x = 1
+fontSize = 10
+
+data4hmap$ELO_logp = -log10(data4hmap$ELO_pval)
+data4hmap$A3D_logp = -log10(data4hmap$A3D_pval)
+
+WGCNA::labeledHeatmap(Matrix = data4hmap[,c("ELO_logp","A3D_logp")],
+                            xLabels = c("ELO","A3D"),
+                            yLabels = c("fMRI","SA Normative","CT Normative","Atypical"),
+                            ySymbols = NULL, 
+                            colorLabels = FALSE,
+                            # colors = WGCNA::blueWhiteRed(50),
+                            colors = colorRampPalette(c("blue","white","red"))(100),
+                            textMatrix = round(data4hmap[,c("ELO_OR","A3D_OR")],digits=2),
+                            setStdMargins = FALSE, cex.text = 2, zlim = c(0,3),
+                            main = " ")
+
+data4hmap$ELO_fdr = p.adjust(data4hmap$ELO_pval, method = "fdr")
+data4hmap$A3D_fdr = p.adjust(data4hmap$A3D_pval, method = "fdr")
+data4hmap
+```

@@ -1,0 +1,80 @@
+---
+title: "02_betacorrection"
+author: "Veronica Mandelli"
+date: "10/12/2022"
+output: html_document
+---
+
+### load libraries and set paths
+```{r}
+# load libraries
+library(gridExtra)
+library(ggplot2)
+library(reshape2)
+
+# set paths
+work_dir = "..."
+codepath = file.path(work_dir,"code")
+datapath = file.path(work_dir,"results","reval")
+resultpath = file.path(work_dir,"results","data_cleaning")
+phenopath = file.path(work_dir,"ndar_datawrangling_","nda_rawdata")
+plotpath = file.path(work_dir,"plot")
+betapath =  file.path(work_dir,"results","beta")
+
+```
+
+# load data
+```{r}
+NDA_data_tr = read.csv(file.path(datapath,"TRAIN_oct23.csv"), header=TRUE)
+NDA_data_tr$TR_TS = "tr"
+NDA_data_ts = read.csv(file.path(datapath,"TEST_oct23.csv"), header=TRUE)
+NDA_data_ts$TR_TS = "ts"
+```
+
+# check age_sex_format distribution in train and test
+```{r}
+library(wesanderson)
+library(ggplot2)
+color = wes_palette("IsleofDogs1")
+data2plot =  rbind(NDA_data_tr,NDA_data_ts)
+format =ggplot(na.omit(subset(data2plot, select = c(TR_TS,format))), aes(x= TR_TS,  group=format)) + 
+    geom_bar(aes(y = ..prop.., fill = factor(..x..)), stat="count") +
+    geom_text(aes( label = scales::percent(..prop..),
+                   y= ..prop.. ), stat= "count", vjust = -.5,size=2) +
+    labs(y = "Percent",fill = "format") +
+    facet_grid(~format) +
+    scale_y_continuous(labels = scales::percent)+ ylim(0,0.87) 
+format
+```
+
+# correctionin using betas of VABS (form Mandelli et al., 2023)
+```{r}
+# correct the format
+
+data2stat = rbind(NDA_data_tr,NDA_data_ts)
+#change levels of the factors
+data2stat$format =  factor(data2stat$format,level = c('interview','survey','ed_3'))
+
+var_list = c ("communicationdomain_totalb","livingskillsdomain_totalb","socializationdomain_totalb",
+              "motorskillsdomain_totalb","composite_totalb")
+
+covname2use = c('formatsurvey','formated_3') 
+
+for (var in var_list){
+  #load the beta1 matrix
+  beta1 = read.csv(file.path(betapath,paste("beta1",var,".csv",sep='')),row.names=1)
+  
+  #create the full model
+  full_model_test = model.matrix(~0 + format,
+                                   data = data2stat)
+    
+    colnames(full_model_test) = c('formatinterview','formatsurvey',"formated_3")
+    col_name = paste("new_",var, sep='')
+    data2stat[,col_name] = as.numeric(t(data2stat[,var]) - t(beta1) %*% t(full_model_test[,covname2use]))
+}
+
+print(length(unique(data2stat$subjectkey)))
+
+write.csv(data2stat,file.path(resultpath,"df_VABS_MSEL_betacorrected_oct23.csv"))
+```
+

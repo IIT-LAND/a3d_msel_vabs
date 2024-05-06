@@ -1,0 +1,204 @@
+---
+title: "longmod_ucsd"
+author: "Veronica Mandelli"
+date: "10/12/2023"
+output: html_document
+---
+# subject classification into the subtypes is done with the WEB APPLICATION
+here we print longitudinal plots to describe developmental trajectories of each autism subtype
+```{r}
+work_dir = ""
+codepath = file.path(work_dir,"code")
+data_long_path = file.path(work_dir,"results","data_wrangling_output")
+phenopath = file.path(work_dir,"ndar_datawrangling_","nda_rawdata")
+source(file.path(codepath,"spaghettiPlot2_nodataset.R"))
+color = c("#FF9933","#3399CC","#009900","#CC0099") 
+
+# with age as input feature
+datapath = file.path(work_dir,"results","reval_AGE")
+resultpath = file.path(work_dir,"results","reval_AGE")
+plot_path = file.path(work_dir,"plot","reval_AGE")
+uscd_path = file.path(work_dir,'data','UCSD')
+
+library(openxlsx)
+```
+
+```{r}
+# load data UCSD with cluster
+ucsd_name = "ucsd_24_68_class_201023.csv" # class_ucsd_new _ se lo cerchi in code
+ucsd_data_cl= read.csv(file.path(uscd_path,ucsd_name))
+table(ucsd_data_cl$subtype)
+ucsd_data_cl = ucsd_data_cl[,c("sub_id","subtype")]
+
+# load long ucsd 
+uscd_name_long = "tidy_ucsd_long_allsubj_201023.csv"
+ucsd_data_long= read.csv(file.path(uscd_path,uscd_name_long))
+
+# merge
+ucsd_data = merge(ucsd_data_cl,ucsd_data_long,by.x="sub_id",by.y="subjectid", all.x=TRUE, all.y=FALSE)
+```
+
+
+# plot VABS
+```{r}
+
+var2use = c("vine_ComTotal_DomStd","vine_DlyTotal_DomStd",
+           "vine_SocTotal_DomStd","vine_MtrTotal_DomStd")
+data2plot = ucsd_data
+# correct some "0"
+data2plot[data2plot == 0] <- NA
+size  = 3
+
+#prepare for the spaghetti
+data2plot$cluster = data2plot$subtype
+data2plot$cluster=factor(data2plot$cluster,levels = c('HIGH','LOW'))
+data2plot$'subjectId'=data2plot$sub_id
+
+plt_vabs = list()
+x_lim = list(c(0, 85),c(0, 85),c(0, 85),c(0, 85))
+title_list = c("Communication","Daily Living Skills","Socialization", "Motor" )
+y_lim_ = c(25, 125)
+
+for (i in 1:length(var2use)) {
+    col2use = var2use[i]
+    resp = spaghettiPlot2_nodataset(data2use = data2plot,
+    x_var = 'vine_agemo',
+    y_var = col2use,
+    subgrp_var = "cluster",
+    cov_vars=NULL,
+    xLabel = 'Age',
+    yLabel = "Standardized score",
+    modelType = "linear",
+    fname2save = NULL,
+    plot_dots = FALSE, plot_lines = TRUE,
+    dot_alpha = 1/10, line_alpha = 3/10,
+    xLimits = x_lim[[i]], yLimits = y_lim_,
+    lineColor = "cluster", dotColor = "cluster",
+    legend_name = "Slope", maxIter = 500,
+    plot_title = title_list[i])
+
+  # change color 
+  #change color 
+  cols2use = color
+  font_size = 11
+  p_com = resp$p
+  p_com = p_com + scale_colour_manual(values = cols2use) + scale_fill_manual(values = cols2use)
+  p_com = p_com + theme_bw(base_size = font_size) +
+  theme(plot.title = element_text(hjust = 0.5, size=font_size)) +
+  guides(colour = FALSE, fill = FALSE)
+  
+   plt_vabs[[i]]=p_com
+   print(p_com)
+   
+   # do lme analysis
+  lme2save = anova(resp$lme_model)
+  # correct p value for multiple comparison
+  for (a in 1:3){
+    p = lme2save[a,"Pr(>F)"]
+    #print('p')
+    #print(p)
+    p_adj_ = p.adjust(p, method = "fdr", n = size)
+    #print('p_adj_')
+    #print(p_adj_)
+    lme2save[a,'p_adj_temp'] = p_adj_
+  }
+  lme_final_2save = lme2save[,c("Sum Sq","Mean Sq","NumDF","DenDF","F value","Pr(>F)","p_adj_temp")]
+  colnames(lme_final_2save)= c("Sum Sq","Mean Sq","NumDF","DenDF","F value","p value","p_adj")                      
+ # write.xlsx(lme_final_2save, file.path(resultpath,paste('UCSD_Long_',title_list[i],"_new_oct23_AGE_gridsearch.xlsx",sep = '')))
+  
+  
+}
+```
+
+# plot MSEL
+```{r}
+var2use = c('mullen_VR_AgeEq','mullen_FM_AgeEq','mullen_RL_AgeEq','mullen_EL_AgeEq')
+plt_mels = list()
+title_list= c("Visual Reception","Fine Motor","Receptive Language","Expressive Language")
+
+
+y_lim_ = c(0, 90)
+x_lim_ = c(0, 60)
+
+for (i in 1:length(var2use)) {
+    col2use = var2use[i]
+    resp = spaghettiPlot2_nodataset(data2use = data2plot,
+    x_var = 'mullen_ageMo',
+    y_var = col2use,
+    subgrp_var = "cluster",
+    cov_vars=NULL,
+    xLabel = 'Age',
+    yLabel = "Age equivalent",
+    modelType = "linear",
+    fname2save = NULL,
+    plot_dots = FALSE, plot_lines = TRUE,
+    dot_alpha = 1/10, line_alpha = 3/10,
+    xLimits = x_lim_, yLimits = y_lim_,
+    lineColor = "cluster", dotColor = "cluster",
+    legend_name = "Slope", maxIter = 500,
+    plot_title = title_list[i])
+
+  # change color 
+  #change color 
+  cols2use = color
+  font_size = 11
+  p_com = resp$p
+  p_com = p_com + scale_colour_manual(values = cols2use) + scale_fill_manual(values = cols2use)
+  p_com = p_com + theme_bw(base_size = font_size) +
+  theme(plot.title = element_text(hjust = 0.5, size=font_size)) +
+  guides(colour = FALSE, fill = FALSE)
+  
+   plt_mels[[i]]=p_com
+   print(p_com)
+   
+   # do lme analysis
+  lme2save = anova(resp$lme_model)
+  # correct p value for multiple comparison
+  for (a in 1:3){
+    p = lme2save[a,"Pr(>F)"]
+    #print('p')
+    #print(p)
+    p_adj_ = p.adjust(p, method = "fdr", n = size)
+    #print('p_adj_')
+    #print(p_adj_)
+    lme2save[a,'p_adj_temp'] = p_adj_
+  }
+  lme_final_2save = lme2save[,c("Sum Sq","Mean Sq","NumDF","DenDF","F value","Pr(>F)","p_adj_temp")]
+  colnames(lme_final_2save)= c("Sum Sq","Mean Sq","NumDF","DenDF","F value","p value","p_adj")                      
+  #write.xlsx(lme_final_2save, file.path(resultpath,paste('UCSD_Long_',title_list[i],"_new_oct23_AGE.xlsx",sep = '')))
+  
+  
+}
+
+```
+
+```{r}
+library(gridExtra)
+g = grid.arrange(
+    plt_vabs[[1]],
+  plt_vabs[[2]],
+  plt_vabs[[3]],
+  plt_vabs[[4]],
+  plt_mels[[1]],
+  plt_mels[[2]],
+  plt_mels[[3]],
+  plt_mels[[4]],
+  nrow = 2)
+g
+ggsave(file.path(plot_path,paste('UCSD_MSEL_VABS_longitudina_new_oct23_AGE_correct.pdf',sep="")), g, width = 10 ,height = 5)
+```
+
+#### time point per subject
+```{r}
+# VABS
+var2use = c('sub_id',"vine_agemo","time")
+data_long_vabs_ = ucsd_data[var2use]
+data_long_vabs_age = data_long_vabs_[!is.na(data_long_vabs_$vine_agemo),]
+table(data_long_vabs_age$time)
+
+# VABS
+var2use = c('sub_id',"mullen_ageMo","time")
+data_long_msel_ = ucsd_data[var2use]
+data_long_msel_age = data_long_msel_[!is.na(data_long_msel_$mullen_ageMo),]
+table(data_long_msel_age$time)
+```

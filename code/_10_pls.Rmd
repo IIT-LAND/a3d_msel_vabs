@@ -1,0 +1,580 @@
+---
+title: "PLS analysis"
+author: "Michael Lombardo"
+date: "13/10/2023"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Plot PLS results
+
+```{r, warning=FALSE, message=FALSE}
+library(easypackages)
+libraries("tidyverse","ggheatmap","here","ggseg","ggsegChen","patchwork","matlabr")
+
+plotdir = here("pls","plots")
+codedir = here("pls","code")
+
+RUNMATLAB = FALSE
+options(matlab.path = "/Applications/MATLAB_R2024a.app/bin")
+
+chen_area_meta_data = read.csv(file.path(codedir,"chen_area_meta_data.csv"))
+chen_thickness_meta_data = read.csv(file.path(codedir,"chen_thickness_meta_data.csv"))
+```
+
+# Run PLS analyses in MATLAB
+
+```{r, warning=FALSE, message=FALSE}
+if (RUNMATLAB){
+  code2run = sprintf("cd %s; runPLS_fmri('ELO');",codedir)
+  res = run_matlab_code(code2run)
+  
+  code2run = sprintf("cd %s; runPLS_fmri('A3D');",codedir)
+  res = run_matlab_code(code2run)
+  
+  code2run = sprintf("cd %s; runPLS_smri('ELO','sa');",codedir)
+  res = run_matlab_code(code2run)
+  
+  code2run = sprintf("cd %s; runPLS_smri('ELO','ct');",codedir)
+  res = run_matlab_code(code2run)
+  
+  code2run = sprintf("cd %s; runPLS_smri('A3D','sa');",codedir)
+  res = run_matlab_code(code2run)
+  
+  code2run = sprintf("cd %s; runPLS_smri('A3D','ct');",codedir)
+  res = run_matlab_code(code2run)
+}
+```
+
+# fMRI results - ELO
+
+```{r, warning=FALSE, message=FALSE}
+ELO = read.csv(here("pls","results","fmri","ELO_natneurosci_bootlim_data4plotting_LV1_ci95.csv"))
+
+fontSize = 18
+data4heatmap = ELO
+level_ordering = rev(c("M17","M15","M13","M21","M11","M18","M2","M8","M6","M10",
+                       "M1","M16","M19","M7","M12","M9","M20","M14","M5","M4","M3"))
+data4heatmap$ModName = factor(data4heatmap$ModName, 
+                              levels = level_ordering)
+data4heatmap$Grp = factor(data4heatmap$Grp, levels = c("Good","Poor","TD")) 
+me_corr_comp = data.frame(matrix(nrow = dim(data4heatmap)[1], ncol = 3))
+colnames(me_corr_comp) = c("Grp","ELO","A3D")
+me_corr_comp$Grp = data4heatmap$Grp
+me_corr_comp$ELO = data4heatmap$corr
+p = ggplot(data = data4heatmap) + 
+  geom_tile(aes(y = ModName, x = Grp, fill= corr)) + 
+  geom_text(aes(y= ModName, x=Grp, label = round(corr,2)),size = 5) + 
+  scale_fill_gradientn(colors = colorRampPalette(c("blue","white","red"))(100), limits=c(-1,1)) +
+  # scale_fill_gradient(low = "white", high="red") + 
+  ylab("")+xlab("") +
+  theme(
+    # Remove panel border
+    panel.border = element_blank(),  
+    # Remove panel grid lines
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    # Remove panel background
+    panel.background = element_blank(),
+    axis.text.x = element_text(size=fontSize),
+    axis.text.y = element_text(size=fontSize),
+    axis.title.x = element_text(size=fontSize),
+    strip.text.x = element_text(size=fontSize),
+    axis.title.y = element_text(size=fontSize),
+    plot.title = element_text(hjust = 0.5, size=fontSize))
+
+ggsave(filename = file.path(plotdir,"fmri","ELO_LV1_MEcorr.pdf"), width=5,height=5)
+p
+```
+
+
+# fMRI results - AUTISMS-3D
+
+```{r, warning=FALSE, message=FALSE}
+A3D = read.csv(here("pls","results","fmri","AUTISMS-3D_bootlim_data4plotting_LV1_ci95.csv"))
+
+fontSize = 18
+data4heatmap = A3D
+data4heatmap$corr = data4heatmap$corr*-1 
+level_ordering = rev(c("M17","M15","M13","M21","M11","M18","M2","M8","M6","M10",
+                       "M1","M16","M19","M7","M12","M9","M20","M14","M5","M4","M3"))
+data4heatmap$ModName = factor(data4heatmap$ModName, 
+                              levels = level_ordering)
+data4heatmap$Grp = factor(data4heatmap$Grp, levels = c("Type II","Type I","TD")) 
+me_corr_comp = data.frame(matrix(nrow = dim(data4heatmap)[1], ncol = 3))
+colnames(me_corr_comp) = c("Grp","ELO","A3D")
+me_corr_comp$Grp = data4heatmap$Grp
+me_corr_comp$A3D = data4heatmap$corr
+p = ggplot(data = data4heatmap) + 
+  geom_tile(aes(y = ModName, x = Grp, fill= corr)) + 
+  geom_text(aes(y= ModName, x=Grp, label = round(corr,2)),size = 5) + 
+  scale_fill_gradientn(colors = colorRampPalette(c("blue","white","red"))(100), limits=c(-1,1)) +
+  # scale_fill_gradient(low = "white", high="red") + 
+  ylab("")+xlab("") +
+  theme(
+    # Remove panel border
+    panel.border = element_blank(),  
+    # Remove panel grid lines
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    # Remove panel background
+    panel.background = element_blank(),
+    axis.text.x = element_text(size=fontSize),
+    axis.text.y = element_text(size=fontSize),
+    axis.title.x = element_text(size=fontSize),
+    strip.text.x = element_text(size=fontSize),
+    axis.title.y = element_text(size=fontSize),
+    plot.title = element_text(hjust = 0.5, size=fontSize))
+
+ggsave(filename = file.path(plotdir,"fmri","AUTISMS-3D_LV1_MEcorr.pdf"), width=5,height=5)
+p
+```
+
+
+
+# sMRI results - ELO SA LV1
+
+```{r, warning=FALSE, message=FALSE}
+ELO = read.csv(here("pls","results","smri","ELO_sa_MEcorr_bootCI4plotting_LV1_ci95.csv"))
+
+fontSize = 18
+data4heatmap = ELO
+level_ordering = rev(c("M13","M2","M16","M21","M4","M10","M6","M7","M11","M15",
+                       "M20","M3","M17","M5","M19","M14","M12","M9","M8","M18","M1"))
+data4heatmap$ModName = factor(data4heatmap$ModName, 
+                              levels = level_ordering)
+data4heatmap$Grp = factor(data4heatmap$Grp, levels = c("Poor","Good","TD")) 
+me_corr_comp = data.frame(matrix(nrow = dim(data4heatmap)[1], ncol = 3))
+colnames(me_corr_comp) = c("Grp","ELO","A3D")
+me_corr_comp$Grp = data4heatmap$Grp
+me_corr_comp$ELO = data4heatmap$corr
+p = ggplot(data = data4heatmap) + 
+  geom_tile(aes(y = ModName, x = Grp, fill= corr)) + 
+  geom_text(aes(y= ModName, x=Grp, label = round(corr,2)),size = 5) + 
+  scale_fill_gradientn(colors = colorRampPalette(c("blue","white","red"))(100), limits=c(-1,1)) +
+  # scale_fill_gradient(low = "white", high="red") + 
+  ylab("")+xlab("") +
+  theme(
+    # Remove panel border
+    panel.border = element_blank(),  
+    # Remove panel grid lines
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    # Remove panel background
+    panel.background = element_blank(),
+    axis.text.x = element_text(size=fontSize),
+    axis.text.y = element_text(size=fontSize),
+    axis.title.x = element_text(size=fontSize),
+    strip.text.x = element_text(size=fontSize),
+    axis.title.y = element_text(size=fontSize),
+    plot.title = element_text(hjust = 0.5, size=fontSize))
+
+ggsave(filename = file.path(plotdir,"smri","ELO_SA_LV1_MEcorr.pdf"), width=5,height=5)
+p
+
+# ELO SA LV1 Brain Bootstrap Ratios 
+data2plot = read.csv(here("pls","results","smri","ELO_sa_brainBSR4plotting.csv"))
+df2plot = subset(data2plot, data2plot$feature=="Surface Area")
+df2plot = merge(df2plot, chen_area_meta_data, by = "brainreg")
+fontSize = 18
+
+df4plot = subset(df2plot,df2plot$feature=="Surface Area" & df2plot$hemisphere=="LH")
+p_sal = ggseg(.data = df4plot, 
+              atlas = chenAr, 
+              mapping=aes(fill=BSR_LV1), 
+              position="stacked", 
+              colour="black",
+              hemisphere = "left") + 
+  scale_fill_gradientn(colors = colorRampPalette(c("blue","white","red"))(100), limits=c(-20,20)) +
+  guides(fill = guide_colourbar(nbin = 100)) + labs(title = "Surface Area LV1") + 
+  theme(text = element_text(size=fontSize))
+
+df4plot = subset(df2plot,df2plot$feature=="Surface Area" & df2plot$hemisphere=="RH")
+p_sar = ggseg(.data = df4plot, 
+              atlas = chenAr, 
+              mapping=aes(fill=BSR_LV1), 
+              position="stacked", 
+              colour="black",
+              hemisphere = "right") + 
+  scale_fill_gradientn(colors = colorRampPalette(c("blue","white","red"))(100), limits=c(-20,20)) +
+  guides(fill = guide_colourbar(nbin = 100)) + labs(title = "Surface Area LV1") + 
+  theme(text = element_text(size=fontSize))
+
+p_sa = (p_sar)/(p_sal)
+ggsave(filename = file.path(plotdir, "smri","ELO_SA_LV1_brainBSR.pdf"), plot = p_sa)
+p_sa
+```
+
+
+# sMRI results - ELO CT LV1
+
+```{r, warning=FALSE, message=FALSE}
+ELO = read.csv(here("pls","results","smri","ELO_ct_MEcorr_bootCI4plotting_LV1_ci95.csv"))
+
+fontSize = 18
+data4heatmap = ELO
+level_ordering = rev(c("M13","M2","M16","M21","M4","M10","M6","M7","M11","M15",
+                       "M20","M3","M17","M5","M19","M14","M12","M9","M8","M18","M1"))
+data4heatmap$ModName = factor(data4heatmap$ModName, 
+                              levels = level_ordering)
+data4heatmap$Grp = factor(data4heatmap$Grp, levels = c("Poor","Good","TD")) 
+me_corr_comp = data.frame(matrix(nrow = dim(data4heatmap)[1], ncol = 3))
+colnames(me_corr_comp) = c("Grp","ELO","A3D")
+me_corr_comp$Grp = data4heatmap$Grp
+me_corr_comp$ELO = data4heatmap$corr
+p = ggplot(data = data4heatmap) + 
+  geom_tile(aes(y = ModName, x = Grp, fill= corr)) + 
+  geom_text(aes(y= ModName, x=Grp, label = round(corr,2)),size = 5) + 
+  scale_fill_gradientn(colors = colorRampPalette(c("blue","white","red"))(100), limits=c(-1,1)) +
+  # scale_fill_gradient(low = "white", high="red") + 
+  ylab("")+xlab("") +
+  theme(
+    # Remove panel border
+    panel.border = element_blank(),  
+    # Remove panel grid lines
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    # Remove panel background
+    panel.background = element_blank(),
+    axis.text.x = element_text(size=fontSize),
+    axis.text.y = element_text(size=fontSize),
+    axis.title.x = element_text(size=fontSize),
+    strip.text.x = element_text(size=fontSize),
+    axis.title.y = element_text(size=fontSize),
+    plot.title = element_text(hjust = 0.5, size=fontSize))
+
+ggsave(filename = file.path(plotdir,"smri","ELO_CT_LV1_MEcorr.pdf"), width=5,height=5)
+p
+
+# ELO CT LV1 Brain Bootstrap Ratios
+data2plot = read.csv(here("pls","results","smri","ELO_ct_brainBSR4plotting.csv"))
+df2plot = subset(data2plot, data2plot$feature=="Cortical Thickness")
+df2plot = merge(df2plot, chen_thickness_meta_data, by = "brainreg")
+fontSize = 18
+
+df4plot = subset(df2plot,df2plot$feature=="Cortical Thickness" & df2plot$hemisphere=="LH")
+p_ctl = ggseg(.data = df4plot, 
+              atlas = chenTh, 
+              mapping=aes(fill=BSR_LV1), 
+              position="stacked", 
+              colour="black",
+              hemisphere = "left") + 
+  scale_fill_gradientn(colors = colorRampPalette(c("blue","white","red"))(100), limits=c(-20,20)) +
+  guides(fill = guide_colourbar(nbin = 100)) + labs(title = "Cortical Thickness LV1") + 
+  theme(text = element_text(size=fontSize))
+
+df4plot = subset(df2plot,df2plot$feature=="Cortical Thickness" & df2plot$hemisphere=="RH")
+p_ctr = ggseg(.data = df4plot, 
+              atlas = chenTh, 
+              mapping=aes(fill=BSR_LV1), 
+              position="stacked", 
+              colour="black",
+              hemisphere = "right") + 
+  scale_fill_gradientn(colors = colorRampPalette(c("blue","white","red"))(100), limits=c(-20,20)) +
+  guides(fill = guide_colourbar(nbin = 100)) + labs(title = "Cortical Thickness LV1") + 
+  theme(text = element_text(size=fontSize))
+
+p_ct = (p_ctr)/(p_ctl)
+ggsave(filename = file.path(plotdir, "smri","ELO_CT_LV1_brainBSR.pdf"), plot = p_ct)
+p_ct
+```
+
+# sMRI results - ELO CT LV2
+
+```{r, warning=FALSE, message=FALSE}
+ELO = read.csv(here("pls","results","smri","ELO_ct_MEcorr_bootCI4plotting_LV2_ci95.csv"))
+
+fontSize = 18
+data4heatmap = ELO
+level_ordering = rev(c("M13","M2","M16","M21","M4","M10","M6","M7","M11","M15",
+                       "M20","M3","M17","M5","M19","M14","M12","M9","M8","M18","M1"))
+data4heatmap$ModName = factor(data4heatmap$ModName, 
+                              levels = level_ordering)
+data4heatmap$Grp = factor(data4heatmap$Grp, levels = c("Poor","Good","TD")) 
+me_corr_comp = data.frame(matrix(nrow = dim(data4heatmap)[1], ncol = 3))
+colnames(me_corr_comp) = c("Grp","ELO","A3D")
+me_corr_comp$Grp = data4heatmap$Grp
+me_corr_comp$ELO = data4heatmap$corr
+p = ggplot(data = data4heatmap) + 
+  geom_tile(aes(y = ModName, x = Grp, fill= corr)) + 
+  geom_text(aes(y= ModName, x=Grp, label = round(corr,2)),size = 5) + 
+  scale_fill_gradientn(colors = colorRampPalette(c("blue","white","red"))(100), limits=c(-1,1)) +
+  # scale_fill_gradient(low = "white", high="red") + 
+  ylab("")+xlab("") +
+  theme(
+    # Remove panel border
+    panel.border = element_blank(),  
+    # Remove panel grid lines
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    # Remove panel background
+    panel.background = element_blank(),
+    axis.text.x = element_text(size=fontSize),
+    axis.text.y = element_text(size=fontSize),
+    axis.title.x = element_text(size=fontSize),
+    strip.text.x = element_text(size=fontSize),
+    axis.title.y = element_text(size=fontSize),
+    plot.title = element_text(hjust = 0.5, size=fontSize))
+
+ggsave(filename = file.path(plotdir,"smri","ELO_CT_LV2_MEcorr.pdf"), width=5,height=5)
+p
+
+# ELO CT LV2 Brain Bootstrap Ratios
+data2plot = read.csv(here("pls","results","smri","ELO_ct_brainBSR4plotting.csv"))
+df2plot = subset(data2plot, data2plot$feature=="Cortical Thickness")
+df2plot = merge(df2plot, chen_thickness_meta_data, by = "brainreg")
+fontSize = 18
+
+df4plot = subset(df2plot,df2plot$feature=="Cortical Thickness" & df2plot$hemisphere=="LH")
+p_ctl = ggseg(.data = df4plot, 
+              atlas = chenTh, 
+              mapping=aes(fill=BSR_LV2), 
+              position="stacked", 
+              colour="black",
+              hemisphere = "left") + 
+  scale_fill_gradientn(colors = colorRampPalette(c("blue","white","red"))(100), limits=c(-25,25)) +
+  guides(fill = guide_colourbar(nbin = 100)) + labs(title = "Cortical Thickness LV2") + 
+  theme(text = element_text(size=fontSize))
+
+df4plot = subset(df2plot,df2plot$feature=="Cortical Thickness" & df2plot$hemisphere=="RH")
+p_ctr = ggseg(.data = df4plot, 
+              atlas = chenTh, 
+              mapping=aes(fill=BSR_LV2), 
+              position="stacked", 
+              colour="black",
+              hemisphere = "right") + 
+  scale_fill_gradientn(colors = colorRampPalette(c("blue","white","red"))(100), limits=c(-25,25)) +
+  guides(fill = guide_colourbar(nbin = 100)) + labs(title = "Cortical Thickness LV2") + 
+  theme(text = element_text(size=fontSize))
+
+p_ct = (p_ctr)/(p_ctl)
+ggsave(filename = file.path(plotdir, "smri","ELO_CT_LV2_brainBSR.pdf"), plot = p_ct)
+p_ct
+```
+
+# sMRI results - AUTISMS-3D SA LV1
+
+```{r, warning=FALSE, message=FALSE}
+A3D = read.csv(here("pls","results","smri","AUTISMS-3D_sa_MEcorr_bootCI4plotting_LV1_ci95.csv"))
+
+fontSize = 18
+data4heatmap = A3D
+data4heatmap$corr = data4heatmap$corr
+level_ordering = rev(c("M13","M2","M16","M21","M4","M10","M6","M7","M11","M15",
+                       "M20","M3","M17","M5","M19","M14","M12","M9","M8","M18","M1"))
+data4heatmap$ModName = factor(data4heatmap$ModName, 
+                              levels = level_ordering)
+data4heatmap$Grp = factor(data4heatmap$Grp, levels = c("Type I","Type II","TD")) 
+me_corr_comp = data.frame(matrix(nrow = dim(data4heatmap)[1], ncol = 3))
+colnames(me_corr_comp) = c("Grp","ELO","A3D")
+me_corr_comp$Grp = data4heatmap$Grp
+me_corr_comp$A3D = data4heatmap$corr
+p = ggplot(data = data4heatmap) + 
+  geom_tile(aes(y = ModName, x = Grp, fill= corr)) + 
+  geom_text(aes(y= ModName, x=Grp, label = round(corr,2)),size = 5) + 
+  scale_fill_gradientn(colors = colorRampPalette(c("blue","white","red"))(100), limits=c(-1,1)) +
+  # scale_fill_gradient(low = "white", high="red") + 
+  ylab("")+xlab("") +
+  theme(
+    # Remove panel border
+    panel.border = element_blank(),  
+    # Remove panel grid lines
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    # Remove panel background
+    panel.background = element_blank(),
+    axis.text.x = element_text(size=fontSize),
+    axis.text.y = element_text(size=fontSize),
+    axis.title.x = element_text(size=fontSize),
+    strip.text.x = element_text(size=fontSize),
+    axis.title.y = element_text(size=fontSize),
+    plot.title = element_text(hjust = 0.5, size=fontSize))
+
+ggsave(filename = file.path(plotdir,"smri","AUTISMS-3D_SA_LV1_MEcorr.pdf"), width=5,height=5)
+p
+
+# AUTISMS-3D SA LV1 Brain Bootstrap Ratios
+data2plot = read.csv(here("pls","results","smri","AUTISMS-3D_sa_brainBSR4plotting.csv"))
+df2plot = subset(data2plot, data2plot$feature=="Surface Area")
+df2plot = merge(df2plot, chen_area_meta_data, by = "brainreg")
+fontSize = 18
+
+df4plot = subset(df2plot,df2plot$feature=="Surface Area" & df2plot$hemisphere=="LH")
+p_sal = ggseg(.data = df4plot, 
+              atlas = chenAr, 
+              mapping=aes(fill=BSR_LV1), 
+              position="stacked", 
+              colour="black",
+              hemisphere = "left") + 
+  scale_fill_gradientn(colors = colorRampPalette(c("blue","white","red"))(100), limits=c(-25,25)) +
+  guides(fill = guide_colourbar(nbin = 100)) + labs(title = "Surface Area LV1") + 
+  theme(text = element_text(size=fontSize))
+
+df4plot = subset(df2plot,df2plot$feature=="Surface Area" & df2plot$hemisphere=="RH")
+p_sar = ggseg(.data = df4plot, 
+              atlas = chenAr, 
+              mapping=aes(fill=BSR_LV1), 
+              position="stacked", 
+              colour="black",
+              hemisphere = "right") + 
+  scale_fill_gradientn(colors = colorRampPalette(c("blue","white","red"))(100), limits=c(-25,25)) +
+  guides(fill = guide_colourbar(nbin = 100)) + labs(title = "Surface Area LV1") + 
+  theme(text = element_text(size=fontSize))
+
+p_sa = (p_sar)/(p_sal)
+ggsave(filename = file.path(plotdir, "smri","AUTISMS-3D_SA_LV1_brainBSR.pdf"), plot = p_sa)
+p_sa
+```
+
+
+# sMRI results - AUTISMS-3D SA LV2
+
+```{r, warning=FALSE, message=FALSE}
+A3D = read.csv(here("pls","results","smri","AUTISMS-3D_sa_MEcorr_bootCI4plotting_LV2_ci95.csv"))
+
+fontSize = 18
+data4heatmap = A3D
+data4heatmap$corr = data4heatmap$corr*-1
+level_ordering = rev(c("M13","M2","M16","M21","M4","M10","M6","M7","M11","M15",
+                       "M20","M3","M17","M5","M19","M14","M12","M9","M8","M18","M1"))
+data4heatmap$ModName = factor(data4heatmap$ModName, 
+                              levels = level_ordering)
+data4heatmap$Grp = factor(data4heatmap$Grp, levels = c("Type I","Type II","TD")) 
+me_corr_comp = data.frame(matrix(nrow = dim(data4heatmap)[1], ncol = 3))
+colnames(me_corr_comp) = c("Grp","ELO","A3D")
+me_corr_comp$Grp = data4heatmap$Grp
+me_corr_comp$A3D = data4heatmap$corr
+p = ggplot(data = data4heatmap) + 
+  geom_tile(aes(y = ModName, x = Grp, fill= corr)) + 
+  geom_text(aes(y= ModName, x=Grp, label = round(corr,2)),size = 5) + 
+  scale_fill_gradientn(colors = colorRampPalette(c("blue","white","red"))(100), limits=c(-1,1)) +
+  # scale_fill_gradient(low = "white", high="red") + 
+  ylab("")+xlab("") +
+  theme(
+    # Remove panel border
+    panel.border = element_blank(),  
+    # Remove panel grid lines
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    # Remove panel background
+    panel.background = element_blank(),
+    axis.text.x = element_text(size=fontSize),
+    axis.text.y = element_text(size=fontSize),
+    axis.title.x = element_text(size=fontSize),
+    strip.text.x = element_text(size=fontSize),
+    axis.title.y = element_text(size=fontSize),
+    plot.title = element_text(hjust = 0.5, size=fontSize))
+
+ggsave(filename = file.path(plotdir,"smri","AUTISMS-3D_SA_LV2_MEcorr.pdf"), width=5,height=5)
+p
+
+# AUTISMS-3D SA LV2 Brain Bootstrap Ratios
+data2plot = read.csv(here("pls","results","smri","AUTISMS-3D_sa_brainBSR4plotting.csv"))
+df2plot = subset(data2plot, data2plot$feature=="Surface Area")
+df2plot = merge(df2plot, chen_area_meta_data, by = "brainreg")
+fontSize = 18
+df2plot$BSR_LV2 = df2plot$BSR_LV2*-1
+
+df4plot = subset(df2plot,df2plot$feature=="Surface Area" & df2plot$hemisphere=="LH")
+p_sal = ggseg(.data = df4plot, 
+              atlas = chenAr, 
+              mapping=aes(fill=BSR_LV2), 
+              position="stacked", 
+              colour="black",
+              hemisphere = "left") + 
+  scale_fill_gradientn(colors = colorRampPalette(c("blue","white","red"))(100), limits=c(-16,16)) +
+  guides(fill = guide_colourbar(nbin = 100)) + labs(title = "Surface Area LV2") + 
+  theme(text = element_text(size=fontSize))
+
+df4plot = subset(df2plot,df2plot$feature=="Surface Area" & df2plot$hemisphere=="RH")
+p_sar = ggseg(.data = df4plot, 
+              atlas = chenAr, 
+              mapping=aes(fill=BSR_LV2), 
+              position="stacked", 
+              colour="black",
+              hemisphere = "right") + 
+  scale_fill_gradientn(colors = colorRampPalette(c("blue","white","red"))(100), limits=c(-16,16)) +
+  guides(fill = guide_colourbar(nbin = 100)) + labs(title = "Surface Area LV2") + 
+  theme(text = element_text(size=fontSize))
+
+p_sa = (p_sar)/(p_sal)
+ggsave(filename = file.path(plotdir, "smri","AUTISMS-3D_SA_LV2_brainBSR.pdf"), plot = p_sa)
+p_sa
+```
+
+# sMRI results - AUTISMS-3D CT LV1
+
+```{r, warning=FALSE, message=FALSE}
+A3D = read.csv(here("pls","results","smri","AUTISMS-3D_ct_MEcorr_bootCI4plotting_LV1_ci95.csv"))
+
+fontSize = 18
+data4heatmap = A3D
+data4heatmap$corr = data4heatmap$corr
+level_ordering = rev(c("M13","M2","M16","M21","M4","M10","M6","M7","M11","M15",
+                       "M20","M3","M17","M5","M19","M14","M12","M9","M8","M18","M1"))
+data4heatmap$ModName = factor(data4heatmap$ModName, 
+                              levels = level_ordering)
+data4heatmap$Grp = factor(data4heatmap$Grp, levels = c("Type I","Type II","TD")) 
+me_corr_comp = data.frame(matrix(nrow = dim(data4heatmap)[1], ncol = 3))
+colnames(me_corr_comp) = c("Grp","ELO","A3D")
+me_corr_comp$Grp = data4heatmap$Grp
+me_corr_comp$A3D = data4heatmap$corr
+p = ggplot(data = data4heatmap) + 
+  geom_tile(aes(y = ModName, x = Grp, fill= corr)) + 
+  geom_text(aes(y= ModName, x=Grp, label = round(corr,2)),size = 5) + 
+  scale_fill_gradientn(colors = colorRampPalette(c("blue","white","red"))(100), limits=c(-1,1)) +
+  # scale_fill_gradient(low = "white", high="red") + 
+  ylab("")+xlab("") +
+  theme(
+    # Remove panel border
+    panel.border = element_blank(),  
+    # Remove panel grid lines
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    # Remove panel background
+    panel.background = element_blank(),
+    axis.text.x = element_text(size=fontSize),
+    axis.text.y = element_text(size=fontSize),
+    axis.title.x = element_text(size=fontSize),
+    strip.text.x = element_text(size=fontSize),
+    axis.title.y = element_text(size=fontSize),
+    plot.title = element_text(hjust = 0.5, size=fontSize))
+
+ggsave(filename = file.path(plotdir,"smri","AUTISMS-3D_CT_LV1_MEcorr.pdf"), width=5,height=5)
+p
+
+# AUTISMS-3D CT LV1 Brain Bootstrap Ratios
+data2plot = read.csv(here("pls","results","smri","AUTISMS-3D_ct_brainBSR4plotting.csv"))
+df2plot = subset(data2plot, data2plot$feature=="Cortical Thickness")
+df2plot = merge(df2plot, chen_thickness_meta_data, by = "brainreg")
+fontSize = 18
+
+df4plot = subset(df2plot,df2plot$feature=="Cortical Thickness" & df2plot$hemisphere=="LH")
+p_ctl = ggseg(.data = df4plot, 
+              atlas = chenTh, 
+              mapping=aes(fill=BSR_LV1), 
+              position="stacked", 
+              colour="black",
+              hemisphere = "left") + 
+  scale_fill_gradientn(colors = colorRampPalette(c("blue","white","red"))(100), limits=c(-11,11)) +
+  guides(fill = guide_colourbar(nbin = 100)) + labs(title = "Cortical Thickness LV1") + 
+  theme(text = element_text(size=fontSize))
+
+df4plot = subset(df2plot,df2plot$feature=="Cortical Thickness" & df2plot$hemisphere=="RH")
+p_ctr = ggseg(.data = df4plot, 
+              atlas = chenTh, 
+              mapping=aes(fill=BSR_LV1), 
+              position="stacked", 
+              colour="black",
+              hemisphere = "right") + 
+  scale_fill_gradientn(colors = colorRampPalette(c("blue","white","red"))(100), limits=c(-11,11)) +
+  guides(fill = guide_colourbar(nbin = 100)) + labs(title = "Cortical Thickness LV1") + 
+  theme(text = element_text(size=fontSize))
+
+p_ct = (p_ctr)/(p_ctl)
+ggsave(filename = file.path(plotdir, "smri","AUTISMS-3D_CT_LV1_brainBSR.pdf"), plot = p_ct)
+p_ct
+```

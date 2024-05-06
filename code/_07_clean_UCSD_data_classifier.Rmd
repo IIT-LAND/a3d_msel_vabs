@@ -1,0 +1,71 @@
+---
+title: "clean_data_for_classifier"
+author: "Veronica Mandelli"
+date: "10/11/2023"
+output: html_document
+---
+# in this script I clean UCSD data before use the WEB APPLICATION to classify the subjects into theis subtypes  
+```{r}
+work_dir = "..."
+codepath = file.path(work_dir,"code")
+data_long_path = file.path(work_dir,"results","data_wrangling_output")
+phenopath = file.path(work_dir,"ndar_datawrangling_","nda_rawdata")
+source(file.path(codepath,"spaghettiPlot2.R"))
+color = c("#FF9933","#3399CC","#009900","#CC0099") 
+
+# with age as input feature
+datapath = file.path(work_dir,"results","reval_AGE")
+resultpath = file.path(work_dir,"results","reval_AGE")
+plot_path = file.path(work_dir,"plot","reval_AGE")
+file_name=  "dataset_reval_clusters_oct23_AGE.csv"
+uscd_path = file.path(work_dir,'data','UCSD')
+```
+
+
+```{r}
+# ucsd
+uscd_name = "tidy_ucsd_long_allsubj_201023.csv"
+ucsd_data= read.csv(file.path(uscd_path,uscd_name))
+
+# select only ASD
+ucsd_data_asd = ucsd_data[ucsd_data$recentDxJ_dxCode=="ASD",]
+# how many ASD subject
+length(unique(ucsd_data_asd$subjectid))
+# select only observation for MSEL to be between 24-68 months
+ucsd_data_068 = ucsd_data_asd[ucsd_data_asd$mullen_ageMo>=24 & ucsd_data_asd$mullen_ageMo<=68 & !is.na(ucsd_data_asd$mullen_ageMo),]
+
+
+# select col2 use
+col2use = c("subjectid",
+            'vine_ComTotal_DomStd',
+             'vine_DlyTotal_DomStd',
+             'vine_SocTotal_DomStd',
+             'vine_MtrTotal_DomStd',
+            "mullen_VR_AgeEq",
+            "mullen_FM_AgeEq",
+            "mullen_RL_AgeEq",
+            "mullen_EL_AgeEq",
+            "mullen_ageMo",'time')
+
+ucsd_data_068_cols  = ucsd_data_068[,col2use]
+
+# 0 should be NaNs
+ucsd_data_068_cols[ucsd_data_068_cols == 0] <- NA
+
+# filter nans
+ucsd_data_068_nonan = ucsd_data_068_cols[complete.cases(ucsd_data_068_cols),]
+
+# select the 1st observation for each subject
+ucsd_data_T1_order = ucsd_data_068_nonan[order(ucsd_data_068_nonan[,'subjectid'], ucsd_data_068_nonan[,'time']), ]
+ucsd_data_T1=ucsd_data_T1_order[!duplicated(ucsd_data_T1_order$subjectid),]
+
+
+
+# save
+write.csv(ucsd_data_T1[,c(1:10)],file.path(uscd_path,'correct_USCD_data.csv'))
+
+
+```
+
+
+

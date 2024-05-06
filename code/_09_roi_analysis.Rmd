@@ -1,0 +1,664 @@
+---
+title: "ROI analysis"
+author: "Michael Lombardo"
+date: "13/10/2023"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# ROI analysis
+
+```{r, warning=FALSE, message=FALSE}
+library(easypackages)
+libraries("here","tidyverse","readxl","reshape2","patchwork","ggpackets","emmeans","psych")
+
+cohens_d <- function(x, y, DIM=1, SIGN=TRUE, na.rm=TRUE) {
+
+	library(matrixStats)
+	
+	# if x and y are vectors, coerce them into matrices
+	if (class(x)=="numeric" | class(x)=="integer") {
+		x <- as.matrix(x)
+	} # if
+
+	if (class(y)=="numeric" | class(y)=="integer") {
+		y <- as.matrix(y)
+	}# if
+  
+  if (na.rm==TRUE){
+    missingValDecision = TRUE
+  } else {
+    missingValDecision = FALSE
+  }
+  
+	# n-1 for x and y
+	lx <- dim(x)[DIM]-1
+	ly <- dim(y)[DIM]-1
+
+	# if samples are along the rows
+	if (DIM==1){
+		if (SIGN){
+			# mean difference (numerator)
+			md <- colMeans(x, na.rm = missingValDecision) - colMeans(y, na.rm = missingValDecision)
+		} else{
+			# mean difference (numerator)
+			md <- abs(colMeans(x, na.rm = missingValDecision) - colMeans(y, na.rm = missingValDecision))
+		}# if (SIGN)
+		# pooled variance (denominator), but before any sqrt is done
+		csd <- (lx * rowVars(t(x),na.rm = missingValDecision)) + (ly * rowVars(t(y), na.rm = missingValDecision))
+
+	# else if samples are along the columns
+	} else if (DIM==2){
+		if (SIGN){
+			# mean difference (numerator)
+			md <- rowMeans(x, na.rm = missingValDecision) - rowMeans(y, na.rm = missingValDecision)
+		} else{
+			# mean difference (numerator)
+			md <- abs(rowMeans(x, na.rm = missingValDecision) - rowMeans(y, na.rm = missingValDecision))
+		}# if (SIGN)
+		# pooled variance (denominator), but before any sqrt is done
+		csd <- lx * rowVars(x, na.rm = missingValDecision) + ly * rowVars(y, na.rm = missingValDecision)
+	}# end if
+
+	# divide pooled variance by sum of n-1 for x and y and then square root it
+	csd <- sqrt(csd/(lx + ly))
+	# compute cohen's d
+	cd  <- md/csd
+	
+}# end cohens_d <- function(x, y, DIM)
+
+geom_scatterbox <- ggpacket() +
+  geom_jitter() +
+  geom_boxplot(fill = NA, colour = "#000000", outlier.shape = NA)
+
+data_path = here("roi","data")
+result_path = here("roi","results")
+```
+
+
+```{r, warning=FALSE, message=FALSE}
+psc_data = read.csv(file.path(result_path,"psc_data_nn_neu.csv"))
+psc_data$subtype3d = factor(psc_data$subtype3d, levels = c("TD","LD_DD","HIGH","LOW")) 
+psc_data$subtype_lang = factor(psc_data$subtype_lang, levels = c("TD","LD_DD","Good","Poor")) 
+psc_data$age_diff = psc_data$mullen_ageMo_outcome - psc_data$scan_age
+
+table(psc_data$subtype_lang)
+table(psc_data$subtype3d)
+
+table(psc_data$subtype_lang, psc_data$sex)
+table(psc_data$subtype3d, psc_data$sex)
+
+mod2use = lm(data = psc_data, formula = scan_age ~ subtype3d)
+anova(mod2use)
+
+mod2use = lm(data = psc_data, formula = scan_age ~ subtype_lang)
+anova(mod2use)
+
+describeBy(psc_data[,c("subtype3d","subtype_lang","scan_age")], group="subtype_lang")
+describeBy(psc_data[,c("subtype3d","subtype_lang","scan_age")], group="subtype3d")
+```
+
+## LH temporal
+
+```{r, warning=FALSE, message=FALSE}
+mod1 = lm(data = psc_data, formula = LHtemporal ~ sex + scan_age + subtype3d)
+summary(mod1)
+anova(mod1)
+pairwise_res = emmeans(mod1, pairwise ~ subtype3d)
+pairwise_res
+
+group_names = c("TD","LD_DD","HIGH","LOW")
+d_mat = data.frame(matrix(nrow = length(group_names), ncol = length(group_names)))
+rownames(d_mat) = group_names
+colnames(d_mat) = group_names
+
+# TD vs LOW
+d_res = cohens_d(psc_data[psc_data$subtype3d=="TD","LHtemporal"], 
+                 psc_data[psc_data$subtype3d=="LOW","LHtemporal"])
+d_mat["TD","LOW"] = d_res
+d_mat["LOW","TD"] = d_res
+print(d_res)
+
+# TD vs HIGH
+d_res = cohens_d(psc_data[psc_data$subtype3d=="TD","LHtemporal"], 
+                 psc_data[psc_data$subtype3d=="HIGH","LHtemporal"])
+d_mat["TD","HIGH"] = d_res
+d_mat["HIGH","TD"] = d_res
+print(d_res)
+
+# TD vs LD_DD
+d_res = cohens_d(psc_data[psc_data$subtype3d=="TD","LHtemporal"], 
+                 psc_data[psc_data$subtype3d=="LD_DD","LHtemporal"])
+d_mat["TD","LD_DD"] = d_res
+d_mat["LD_DD","TD"] = d_res
+print(d_res)
+
+# LD_DD vs LOW
+d_res = cohens_d(psc_data[psc_data$subtype3d=="LD_DD","LHtemporal"], 
+                 psc_data[psc_data$subtype3d=="LOW","LHtemporal"])
+d_mat["LD_DD","LOW"] = d_res
+d_mat["LOW","LD_DD"] = d_res
+print(d_res)
+
+# LD_DD vs HIGH
+d_res = cohens_d(psc_data[psc_data$subtype3d=="LD_DD","LHtemporal"], 
+                 psc_data[psc_data$subtype3d=="HIGH","LHtemporal"])
+d_mat["LD_DD","HIGH"] = d_res
+d_mat["HIGH","LD_DD"] = d_res
+print(d_res)
+
+# HIGH vs LOW
+d_res = cohens_d(psc_data[psc_data$subtype3d=="HIGH","LHtemporal"], 
+                 psc_data[psc_data$subtype3d=="LOW","LHtemporal"])
+d_mat["HIGH","LOW"] = d_res
+d_mat["LOW","HIGH"] = d_res
+print(d_res)
+
+WGCNA::labeledHeatmap(Matrix = d_mat,
+    xLabels = rownames(d_mat), yLabels = colnames(d_mat),
+    ySymbols = NULL, colorLabels = FALSE,
+    colors = WGCNA::blueWhiteRed(50), textMatrix = round(d_mat,digits=2),
+    setStdMargins = FALSE, cex.text = 2, zlim = c(0,1),
+    main = "LH Temporal Effect Size (Cohen's d)")
+
+
+
+mod2 = lm(data = psc_data, formula = LHtemporal ~ sex + scan_age + subtype_lang)
+summary(mod2)
+anova(mod2)
+pairwise_res = emmeans(mod2, pairwise ~ subtype_lang)
+pairwise_res
+
+group_names = c("TD","LD_DD","Good","Poor")
+d_mat = data.frame(matrix(nrow = length(group_names), ncol = length(group_names)))
+rownames(d_mat) = group_names
+colnames(d_mat) = group_names
+
+# TD vs Poor
+d_res = cohens_d(psc_data[psc_data$subtype_lang=="TD","LHtemporal"], 
+                 psc_data[psc_data$subtype_lang=="Poor","LHtemporal"])
+d_mat["TD","Poor"] = d_res
+d_mat["Poor","TD"] = d_res
+print(d_res)
+
+# TD vs Good
+d_res = cohens_d(psc_data[psc_data$subtype_lang=="TD","LHtemporal"], 
+                 psc_data[psc_data$subtype_lang=="Good","LHtemporal"])
+d_mat["TD","Good"] = d_res
+d_mat["Good","TD"] = d_res
+print(d_res)
+
+# TD vs LD_DD
+d_res = cohens_d(psc_data[psc_data$subtype_lang=="TD","LHtemporal"], 
+                 psc_data[psc_data$subtype_lang=="LD_DD","LHtemporal"])
+d_mat["TD","LD_DD"] = d_res
+d_mat["LD_DD","TD"] = d_res
+print(d_res)
+
+# LD_DD vs Poor
+d_res = cohens_d(psc_data[psc_data$subtype_lang=="LD_DD","LHtemporal"], 
+                 psc_data[psc_data$subtype_lang=="Poor","LHtemporal"])
+d_mat["LD_DD","Poor"] = d_res
+d_mat["Poor","LD_DD"] = d_res
+print(d_res)
+
+# LD_DD vs Good
+d_res = cohens_d(psc_data[psc_data$subtype_lang=="LD_DD","LHtemporal"], 
+                 psc_data[psc_data$subtype_lang=="Good","LHtemporal"])
+d_mat["LD_DD","Good"] = d_res
+d_mat["Good","LD_DD"] = d_res
+print(d_res)
+
+# Good vs Poor
+d_res = cohens_d(psc_data[psc_data$subtype_lang=="Good","LHtemporal"], 
+                 psc_data[psc_data$subtype_lang=="Poor","LHtemporal"])
+d_mat["Good","Poor"] = d_res
+d_mat["Poor","Good"] = d_res
+print(d_res)
+
+WGCNA::labeledHeatmap(Matrix = d_mat,
+    xLabels = rownames(d_mat), yLabels = colnames(d_mat),
+    ySymbols = NULL, colorLabels = FALSE,
+    colors = WGCNA::blueWhiteRed(50), textMatrix = round(d_mat,digits=2),
+    setStdMargins = FALSE, cex.text = 2, zlim = c(0,1),
+    main = "LH Temporal Effect Size (Cohen's d)")
+
+
+AIC(mod1,mod2)
+
+p1 = ggplot(data = psc_data, aes(x = subtype3d, y = LHtemporal, colour = subtype3d)) + 
+  geom_scatterbox() + 
+  guides(colour="none")
+
+p2 = ggplot(data = psc_data, aes(x = subtype_lang, y = LHtemporal, colour = subtype_lang)) + 
+  geom_scatterbox() + 
+  guides(colour="none")
+
+p_final = p1 + p2
+p_final
+```
+
+
+## RH temporal
+
+```{r, warning=FALSE, message=FALSE}
+mod1 = lm(data = psc_data, formula = RHtemporal ~ sex + scan_age + subtype3d)
+summary(mod1)
+anova(mod1)
+pairwise_res = emmeans(mod1, pairwise ~ subtype3d)
+pairwise_res
+
+group_names = c("TD","LD_DD","HIGH","LOW")
+d_mat = data.frame(matrix(nrow = length(group_names), ncol = length(group_names)))
+rownames(d_mat) = group_names
+colnames(d_mat) = group_names
+
+# TD vs LOW
+d_res = cohens_d(psc_data[psc_data$subtype3d=="TD","RHtemporal"], 
+                 psc_data[psc_data$subtype3d=="LOW","RHtemporal"])
+d_mat["TD","LOW"] = d_res
+d_mat["LOW","TD"] = d_res
+print(d_res)
+
+# TD vs HIGH
+d_res = cohens_d(psc_data[psc_data$subtype3d=="TD","RHtemporal"], 
+                 psc_data[psc_data$subtype3d=="HIGH","RHtemporal"])
+d_mat["TD","HIGH"] = d_res
+d_mat["HIGH","TD"] = d_res
+print(d_res)
+
+# TD vs LD_DD
+d_res = cohens_d(psc_data[psc_data$subtype3d=="TD","RHtemporal"], 
+                 psc_data[psc_data$subtype3d=="LD_DD","RHtemporal"])
+d_mat["TD","LD_DD"] = d_res
+d_mat["LD_DD","TD"] = d_res
+print(d_res)
+
+# LD_DD vs LOW
+d_res = cohens_d(psc_data[psc_data$subtype3d=="LD_DD","RHtemporal"], 
+                 psc_data[psc_data$subtype3d=="LOW","RHtemporal"])
+d_mat["LD_DD","LOW"] = d_res
+d_mat["LOW","LD_DD"] = d_res
+print(d_res)
+
+# LD_DD vs HIGH
+d_res = cohens_d(psc_data[psc_data$subtype3d=="LD_DD","RHtemporal"], 
+                 psc_data[psc_data$subtype3d=="HIGH","RHtemporal"])
+d_mat["LD_DD","HIGH"] = d_res
+d_mat["HIGH","LD_DD"] = d_res
+print(d_res)
+
+# HIGH vs LOW
+d_res = cohens_d(psc_data[psc_data$subtype3d=="HIGH","RHtemporal"], 
+                 psc_data[psc_data$subtype3d=="LOW","RHtemporal"])
+d_mat["HIGH","LOW"] = d_res
+d_mat["LOW","HIGH"] = d_res
+print(d_res)
+
+WGCNA::labeledHeatmap(Matrix = d_mat,
+    xLabels = rownames(d_mat), yLabels = colnames(d_mat),
+    ySymbols = NULL, colorLabels = FALSE,
+    colors = WGCNA::blueWhiteRed(50), textMatrix = round(d_mat,digits=2),
+    setStdMargins = FALSE, cex.text = 2, zlim = c(0,1),
+    main = "RH Temporal Effect Size (Cohen's d)")
+
+
+
+mod2 = lm(data = psc_data, formula = RHtemporal ~ sex + scan_age + subtype_lang)
+summary(mod2)
+anova(mod2)
+pairwise_res = emmeans(mod2, pairwise ~ subtype_lang)
+pairwise_res
+
+group_names = c("TD","LD_DD","Good","Poor")
+d_mat = data.frame(matrix(nrow = length(group_names), ncol = length(group_names)))
+rownames(d_mat) = group_names
+colnames(d_mat) = group_names
+
+# TD vs Poor
+d_res = cohens_d(psc_data[psc_data$subtype_lang=="TD","RHtemporal"], 
+                 psc_data[psc_data$subtype_lang=="Poor","RHtemporal"])
+d_mat["TD","Poor"] = d_res
+d_mat["Poor","TD"] = d_res
+print(d_res)
+
+# TD vs Good
+d_res = cohens_d(psc_data[psc_data$subtype_lang=="TD","RHtemporal"], 
+                 psc_data[psc_data$subtype_lang=="Good","RHtemporal"])
+d_mat["TD","Good"] = d_res
+d_mat["Good","TD"] = d_res
+print(d_res)
+
+# TD vs LD_DD
+d_res = cohens_d(psc_data[psc_data$subtype_lang=="TD","RHtemporal"], 
+                 psc_data[psc_data$subtype_lang=="LD_DD","RHtemporal"])
+d_mat["TD","LD_DD"] = d_res
+d_mat["LD_DD","TD"] = d_res
+print(d_res)
+
+# LD_DD vs Poor
+d_res = cohens_d(psc_data[psc_data$subtype_lang=="LD_DD","RHtemporal"], 
+                 psc_data[psc_data$subtype_lang=="Poor","RHtemporal"])
+d_mat["LD_DD","Poor"] = d_res
+d_mat["Poor","LD_DD"] = d_res
+print(d_res)
+
+# LD_DD vs Good
+d_res = cohens_d(psc_data[psc_data$subtype_lang=="LD_DD","RHtemporal"], 
+                 psc_data[psc_data$subtype_lang=="Good","RHtemporal"])
+d_mat["LD_DD","Good"] = d_res
+d_mat["Good","LD_DD"] = d_res
+print(d_res)
+
+# Good vs Poor
+d_res = cohens_d(psc_data[psc_data$subtype_lang=="Good","RHtemporal"], 
+                 psc_data[psc_data$subtype_lang=="Poor","RHtemporal"])
+d_mat["Good","Poor"] = d_res
+d_mat["Poor","Good"] = d_res
+print(d_res)
+
+WGCNA::labeledHeatmap(Matrix = d_mat,
+    xLabels = rownames(d_mat), yLabels = colnames(d_mat),
+    ySymbols = NULL, colorLabels = FALSE,
+    colors = WGCNA::blueWhiteRed(50), textMatrix = round(d_mat,digits=2),
+    setStdMargins = FALSE, cex.text = 2, zlim = c(0,1),
+    main = "RH Temporal Effect Size (Cohen's d)")
+
+
+
+AIC(mod1,mod2)
+
+p1 = ggplot(data = psc_data, aes(x = subtype3d, y = RHtemporal, colour = subtype3d)) + 
+  geom_scatterbox() + 
+  guides(colour="none")
+
+p2 = ggplot(data = psc_data, aes(x = subtype_lang, y = RHtemporal, colour = subtype_lang)) + 
+  geom_scatterbox() + 
+  guides(colour="none")
+
+p_final = p1 + p2
+p_final
+```
+
+## LH frontal
+
+```{r, warning=FALSE, message=FALSE}
+mod1 = lm(data = psc_data, formula = LHfrontal ~ sex + scan_age + subtype3d)
+summary(mod1)
+anova(mod1)
+pairwise_res = emmeans(mod1, pairwise ~ subtype3d)
+pairwise_res
+
+group_names = c("TD","LD_DD","HIGH","LOW")
+d_mat = data.frame(matrix(nrow = length(group_names), ncol = length(group_names)))
+rownames(d_mat) = group_names
+colnames(d_mat) = group_names
+
+# TD vs LOW
+d_res = cohens_d(psc_data[psc_data$subtype3d=="TD","LHfrontal"], 
+                 psc_data[psc_data$subtype3d=="LOW","LHfrontal"])
+d_mat["TD","LOW"] = d_res
+d_mat["LOW","TD"] = d_res
+print(d_res)
+
+# TD vs HIGH
+d_res = cohens_d(psc_data[psc_data$subtype3d=="TD","LHfrontal"], 
+                 psc_data[psc_data$subtype3d=="HIGH","LHfrontal"])
+d_mat["TD","HIGH"] = d_res
+d_mat["HIGH","TD"] = d_res
+print(d_res)
+
+# TD vs LD_DD
+d_res = cohens_d(psc_data[psc_data$subtype3d=="TD","LHfrontal"], 
+                 psc_data[psc_data$subtype3d=="LD_DD","LHfrontal"])
+d_mat["TD","LD_DD"] = d_res
+d_mat["LD_DD","TD"] = d_res
+print(d_res)
+
+# LD_DD vs LOW
+d_res = cohens_d(psc_data[psc_data$subtype3d=="LD_DD","LHfrontal"], 
+                 psc_data[psc_data$subtype3d=="LOW","LHfrontal"])
+d_mat["LD_DD","LOW"] = d_res
+d_mat["LOW","LD_DD"] = d_res
+print(d_res)
+
+# LD_DD vs HIGH
+d_res = cohens_d(psc_data[psc_data$subtype3d=="LD_DD","LHfrontal"], 
+                 psc_data[psc_data$subtype3d=="HIGH","LHfrontal"])
+d_mat["LD_DD","HIGH"] = d_res
+d_mat["HIGH","LD_DD"] = d_res
+print(d_res)
+
+# HIGH vs LOW
+d_res = cohens_d(psc_data[psc_data$subtype3d=="HIGH","LHfrontal"], 
+                 psc_data[psc_data$subtype3d=="LOW","LHfrontal"])
+d_mat["HIGH","LOW"] = d_res
+d_mat["LOW","HIGH"] = d_res
+print(d_res)
+
+WGCNA::labeledHeatmap(Matrix = d_mat,
+    xLabels = rownames(d_mat), yLabels = colnames(d_mat),
+    ySymbols = NULL, colorLabels = FALSE,
+    colors = WGCNA::blueWhiteRed(50), textMatrix = round(d_mat,digits=2),
+    setStdMargins = FALSE, cex.text = 2, zlim = c(0,1),
+    main = "LH Frontal Effect Size (Cohen's d)")
+
+
+
+mod2 = lm(data = psc_data, formula = LHfrontal ~ sex + scan_age + subtype_lang)
+summary(mod2)
+anova(mod2)
+pairwise_res = emmeans(mod2, pairwise ~ subtype_lang)
+pairwise_res
+
+group_names = c("TD","LD_DD","Good","Poor")
+d_mat = data.frame(matrix(nrow = length(group_names), ncol = length(group_names)))
+rownames(d_mat) = group_names
+colnames(d_mat) = group_names
+
+# TD vs Poor
+d_res = cohens_d(psc_data[psc_data$subtype_lang=="TD","LHfrontal"], 
+                 psc_data[psc_data$subtype_lang=="Poor","LHfrontal"])
+d_mat["TD","Poor"] = d_res
+d_mat["Poor","TD"] = d_res
+print(d_res)
+
+# TD vs Good
+d_res = cohens_d(psc_data[psc_data$subtype_lang=="TD","LHfrontal"], 
+                 psc_data[psc_data$subtype_lang=="Good","LHfrontal"])
+d_mat["TD","Good"] = d_res
+d_mat["Good","TD"] = d_res
+print(d_res)
+
+# TD vs LD_DD
+d_res = cohens_d(psc_data[psc_data$subtype_lang=="TD","LHfrontal"], 
+                 psc_data[psc_data$subtype_lang=="LD_DD","LHfrontal"])
+d_mat["TD","LD_DD"] = d_res
+d_mat["LD_DD","TD"] = d_res
+print(d_res)
+
+# LD_DD vs Poor
+d_res = cohens_d(psc_data[psc_data$subtype_lang=="LD_DD","LHfrontal"], 
+                 psc_data[psc_data$subtype_lang=="Poor","LHfrontal"])
+d_mat["LD_DD","Poor"] = d_res
+d_mat["Poor","LD_DD"] = d_res
+print(d_res)
+
+# LD_DD vs Good
+d_res = cohens_d(psc_data[psc_data$subtype_lang=="LD_DD","LHfrontal"], 
+                 psc_data[psc_data$subtype_lang=="Good","LHfrontal"])
+d_mat["LD_DD","Good"] = d_res
+d_mat["Good","LD_DD"] = d_res
+print(d_res)
+
+# Good vs Poor
+d_res = cohens_d(psc_data[psc_data$subtype_lang=="Good","LHfrontal"], 
+                 psc_data[psc_data$subtype_lang=="Poor","LHfrontal"])
+d_mat["Good","Poor"] = d_res
+d_mat["Poor","Good"] = d_res
+print(d_res)
+
+WGCNA::labeledHeatmap(Matrix = d_mat,
+    xLabels = rownames(d_mat), yLabels = colnames(d_mat),
+    ySymbols = NULL, colorLabels = FALSE,
+    colors = WGCNA::blueWhiteRed(50), textMatrix = round(d_mat,digits=2),
+    setStdMargins = FALSE, cex.text = 2, zlim = c(0,1),
+    main = "LH Frontal Effect Size (Cohen's d)")
+
+
+AIC(mod1,mod2)
+
+p1 = ggplot(data = psc_data, aes(x = subtype3d, y = LHfrontal, colour = subtype3d)) + 
+  geom_scatterbox() + 
+  guides(colour="none")
+
+p2 = ggplot(data = psc_data, aes(x = subtype_lang, y = LHfrontal, colour = subtype_lang)) + 
+  geom_scatterbox() + 
+  guides(colour="none")
+
+p_final = p1 + p2
+p_final
+```
+
+## RH frontal
+
+```{r, warning=FALSE, message=FALSE}
+mod1 = lm(data = psc_data, formula = RHfrontal ~ sex + scan_age + subtype3d)
+summary(mod1)
+anova(mod1)
+pairwise_res = emmeans(mod1, pairwise ~ subtype3d)
+pairwise_res
+
+group_names = c("TD","LD_DD","HIGH","LOW")
+d_mat = data.frame(matrix(nrow = length(group_names), ncol = length(group_names)))
+rownames(d_mat) = group_names
+colnames(d_mat) = group_names
+
+# TD vs LOW
+d_res = cohens_d(psc_data[psc_data$subtype3d=="TD","RHfrontal"], 
+                 psc_data[psc_data$subtype3d=="LOW","RHfrontal"])
+d_mat["TD","LOW"] = d_res
+d_mat["LOW","TD"] = d_res
+print(d_res)
+
+# TD vs HIGH
+d_res = cohens_d(psc_data[psc_data$subtype3d=="TD","RHfrontal"], 
+                 psc_data[psc_data$subtype3d=="HIGH","RHfrontal"])
+d_mat["TD","HIGH"] = d_res
+d_mat["HIGH","TD"] = d_res
+print(d_res)
+
+# TD vs LD_DD
+d_res = cohens_d(psc_data[psc_data$subtype3d=="TD","RHfrontal"], 
+                 psc_data[psc_data$subtype3d=="LD_DD","RHfrontal"])
+d_mat["TD","LD_DD"] = d_res
+d_mat["LD_DD","TD"] = d_res
+print(d_res)
+
+# LD_DD vs LOW
+d_res = cohens_d(psc_data[psc_data$subtype3d=="LD_DD","RHfrontal"], 
+                 psc_data[psc_data$subtype3d=="LOW","RHfrontal"])
+d_mat["LD_DD","LOW"] = d_res
+d_mat["LOW","LD_DD"] = d_res
+print(d_res)
+
+# LD_DD vs HIGH
+d_res = cohens_d(psc_data[psc_data$subtype3d=="LD_DD","RHfrontal"], 
+                 psc_data[psc_data$subtype3d=="HIGH","RHfrontal"])
+d_mat["LD_DD","HIGH"] = d_res
+d_mat["HIGH","LD_DD"] = d_res
+print(d_res)
+
+# HIGH vs LOW
+d_res = cohens_d(psc_data[psc_data$subtype3d=="HIGH","RHfrontal"], 
+                 psc_data[psc_data$subtype3d=="LOW","RHfrontal"])
+d_mat["HIGH","LOW"] = d_res
+d_mat["LOW","HIGH"] = d_res
+print(d_res)
+
+WGCNA::labeledHeatmap(Matrix = d_mat,
+    xLabels = rownames(d_mat), yLabels = colnames(d_mat),
+    ySymbols = NULL, colorLabels = FALSE,
+    colors = WGCNA::blueWhiteRed(50), textMatrix = round(d_mat,digits=2),
+    setStdMargins = FALSE, cex.text = 2, zlim = c(0,1),
+    main = "RH Frontal Effect Size (Cohen's d)")
+
+
+
+mod2 = lm(data = psc_data, formula = RHfrontal ~ sex + scan_age + subtype_lang)
+summary(mod2)
+anova(mod2)
+pairwise_res = emmeans(mod2, pairwise ~ subtype_lang)
+pairwise_res
+
+group_names = c("TD","LD_DD","Good","Poor")
+d_mat = data.frame(matrix(nrow = length(group_names), ncol = length(group_names)))
+rownames(d_mat) = group_names
+colnames(d_mat) = group_names
+
+# TD vs Poor
+d_res = cohens_d(psc_data[psc_data$subtype_lang=="TD","RHfrontal"], 
+                 psc_data[psc_data$subtype_lang=="Poor","RHfrontal"])
+d_mat["TD","Poor"] = d_res
+d_mat["Poor","TD"] = d_res
+print(d_res)
+
+# TD vs Good
+d_res = cohens_d(psc_data[psc_data$subtype_lang=="TD","RHfrontal"], 
+                 psc_data[psc_data$subtype_lang=="Good","RHfrontal"])
+d_mat["TD","Good"] = d_res
+d_mat["Good","TD"] = d_res
+print(d_res)
+
+# TD vs LD_DD
+d_res = cohens_d(psc_data[psc_data$subtype_lang=="TD","RHfrontal"], 
+                 psc_data[psc_data$subtype_lang=="LD_DD","RHfrontal"])
+d_mat["TD","LD_DD"] = d_res
+d_mat["LD_DD","TD"] = d_res
+print(d_res)
+
+# LD_DD vs Poor
+d_res = cohens_d(psc_data[psc_data$subtype_lang=="LD_DD","RHfrontal"], 
+                 psc_data[psc_data$subtype_lang=="Poor","RHfrontal"])
+d_mat["LD_DD","Poor"] = d_res
+d_mat["Poor","LD_DD"] = d_res
+print(d_res)
+
+# LD_DD vs Good
+d_res = cohens_d(psc_data[psc_data$subtype_lang=="LD_DD","RHfrontal"], 
+                 psc_data[psc_data$subtype_lang=="Good","RHfrontal"])
+d_mat["LD_DD","Good"] = d_res
+d_mat["Good","LD_DD"] = d_res
+print(d_res)
+
+# Good vs Poor
+d_res = cohens_d(psc_data[psc_data$subtype_lang=="Good","RHfrontal"], 
+                 psc_data[psc_data$subtype_lang=="Poor","RHfrontal"])
+d_mat["Good","Poor"] = d_res
+d_mat["Poor","Good"] = d_res
+print(d_res)
+
+WGCNA::labeledHeatmap(Matrix = d_mat,
+    xLabels = rownames(d_mat), yLabels = colnames(d_mat),
+    ySymbols = NULL, colorLabels = FALSE,
+    colors = WGCNA::blueWhiteRed(50), textMatrix = round(d_mat,digits=2),
+    setStdMargins = FALSE, cex.text = 2, zlim = c(0,1),
+    main = "RH Frontal Effect Size (Cohen's d)")
+
+AIC(mod1,mod2)
+
+p1 = ggplot(data = psc_data, aes(x = subtype3d, y = RHfrontal, colour = subtype3d)) + 
+  geom_scatterbox() + 
+  guides(colour="none")
+
+p2 = ggplot(data = psc_data, aes(x = subtype_lang, y = RHfrontal, colour = subtype_lang)) + 
+  geom_scatterbox() + 
+  guides(colour="none")
+
+
+p_final = p1 + p2
+p_final
+```

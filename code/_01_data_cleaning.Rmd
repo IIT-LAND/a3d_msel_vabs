@@ -1,0 +1,217 @@
+---
+title: "01_data_cleaning"
+author: "Veronica Mandelli"
+date: "2/3/2022"
+output: html_document
+---
+
+# set paths
+```{r}
+work_dir = "..." # main folder
+codepath = file.path(work_dir,"code")
+datapath = file.path(work_dir,"results","data_wrangling_output") # path of data already extracted from NDA database
+resultpath = file.path(work_dir,"results","data_cleaning")
+phenopath = file.path(work_dir,"ndar_datawrangling_","nda_rawdata")
+plotpath = file.path(work_dir,"plot")
+```
+
+# load data
+```{r}
+# Mullen Scales of Early Learning (MSEL)
+
+file_name = "mullen_t1_between24and68_oct23.txt" # file with MSEL measures from NDA database of autistic children aged 24-68 months,in case of multiple assessments take the 1st available
+MELS = read.csv(file.path(datapath,file_name))
+# how many unique subjects with MSEL
+print(paste('unique MSEL:',length(unique(MELS$subjectkey)), sep=' '))
+rownames(MELS)=MELS$subjectkey
+
+# Vineland Scales of Adaptive behavior
+
+file_name = "vineland_t1_between24and68_oct23.txt"# file with VABS measures from NDA database of autistic children aged 24-68 months,in case of multiple assessments take he 1st available
+VABS = read.csv(file.path(datapath,file_name))
+# how many unique subjects with VABS
+print(paste('unique VABS:',length(unique(VABS$subjectkey)), sep=' '))
+rownames(VABS)=VABS$subjectkey
+
+```
+
+```{r}
+# change interview_age column name not to mix between instruments
+names(MELS)[names(MELS) == 'interview_age'] <- 'interview_age_MELS'
+names(VABS)[names(VABS) == 'interview_age'] <- 'interview_age_VABS'
+
+```
+
+# Check MSEL data and compute the DQ
+```{r}
+# define different types of MELS columns
+
+# t_scores columns
+cols_t =c("scoresumm_vr_t_score","scoresumm_fm_t_score" ,"scoresumm_rl_t_score",  "scoresumm_el_t_score","scoresumm_gm_t_score")
+
+# age equivalent columns
+cols_age_eq = c( "scoresumm_vr_age_equiv", "scoresumm_fm_age_equiv",
+                "scoresumm_rl_age_equiv",  "scoresumm_el_age_equiv","scoresumm_gm_age_equiv")
+
+
+# create the DQ scores (developmental quotients)
+
+mels_sub_list  = MELS$subjectkey
+cols_corr_T = c("DQ_VR","DQ_FM","DQ_RL", "DQ_EL","DQ_GM")
+
+
+for (sub in mels_sub_list){
+  for (feature in 1:5 ){
+    eq_col = cols_age_eq[feature]
+    T_corr_col = cols_corr_T[feature]
+    #T_original = cols_t[feature]
+    MELS[sub,T_corr_col]= round(((MELS[sub,eq_col]/MELS[sub,'interview_age_MELS'])*100))}
+}
+for (col in cols_corr_T ){
+hist = hist(MELS[,col], main = col)
+hist}
+```
+# Delate nans and subjects with more than 1 missing per intrument
+```{r}
+# MSEL
+# subjects with max 1 missing,keep all but takes only those with max 1 miss missing in the cols_corr_T_2use
+cols_corr_T_2use = c("DQ_VR","DQ_FM",
+               "DQ_RL", "DQ_EL")
+
+MELS_noNA = MELS[which(rowMeans(!is.na(MELS[,cols_corr_T_2use])) >= 0.75),]
+
+# VABS 
+# subjects with  max 1 missing,keep all but takes only those with max 1 miss missing in the domain columns
+
+VABS_noNA = VABS[which(rowMeans(!is.na(VABS[,c("communicationdomain_totalb","livingskillsdomain_totalb","socializationdomain_totalb","motorskillsdomain_totalb" )])) >= 0.75),]
+
+# save all the columns
+#MELS_noNA
+write.csv(MELS_noNA,file.path(resultpath,'MSEL_allcolumns_oct23.csv'))
+#VABS_noNA
+write.csv(VABS_noNA,file.path(resultpath,'VABS_allcolumns_oct23.csv'))
+
+```
+
+
+# start from here if data are already saved
+```{r}
+
+MELS_noNA = read.csv(file.path(resultpath,'MSEL_allcolumns_oct23.csv'))
+VABS_noNA = read.csv(file.path(resultpath,'VABS_allcolumns_oct23.csv'))
+ADOS_new = read.csv(file.path(resultpath,'ADOS_allcolumns_oct23.csv'))
+
+
+# merge different instruments
+
+# col2use  
+col2use_vabs = c("subjectkey" ,"interview_age_VABS","collection_id","communicationdomain_totalb",
+                 "livingskillsdomain_totalb","socializationdomain_totalb","motorskillsdomain_totalb" ,"composite_totalb")
+cols_corr_T = c("DQ_VR","DQ_FM","DQ_RL", "DQ_EL",'DQ_GM')
+col2use_mels = c("subjectkey","interview_age_MELS",cols_corr_T) 
+
+
+# combine VABS+ MSEL
+df_VABS_MELS = merge(MELS_noNA[,col2use_mels],VABS_noNA[,col2use_vabs], by = "subjectkey")
+df_VABS_MELS_all_cols = merge(MELS_noNA,VABS_noNA, by = "subjectkey")
+
+
+# check age
+age_check = df_VABS_MELS[,c('interview_age_VABS','interview_age_MELS','subjectkey')]
+age_check$diff = age_check$interview_age_VABS-age_check$interview_age_MELS
+length(age_check[abs(age_check$diff) >12,"subjectkey"])
+# 16 subjects have more than 1 years of difference between the VABS and the MELS
+
+# drop subjects with more than 12 monhts difference between MELS and VABS
+df_VABS_MELS$age_diff = df_VABS_MELS$interview_age_VABS-df_VABS_MELS$interview_age_MELS
+#length(df_VABS_MELS[abs(df_VABS_MELS$age_diff) >12,"subjectkey"])
+df_VABS_MELS_age_ok = df_VABS_MELS[abs(df_VABS_MELS$age_diff)<=12,]
+
+``` 
+
+
+```{r}
+# get info about MELS and VABS sex and diagnosis
+file_name = "ndar_phenotypes.txt" # phenotype files downloaded from NDA
+pheno = read.delim(file.path(phenopath,file_name))
+sublist  = df_VABS_MELS$subjectkey
+pheno_sub = as.data.frame(pheno[pheno$subjectkey %in% sublist,c("subjectkey","sex","phenotype")])
+pheno_sub_nodup = pheno_sub[!duplicated(pheno_sub),]
+
+# find the duplicated
+n_occur <- data.frame(table(pheno_sub_nodup$subjectkey))
+dup_sub = n_occur[n_occur$Freq > 1,] # duplicated subject list
+dup_mat = pheno_sub_nodup[pheno_sub_nodup$subjectkey %in% dup_sub$Var1,]
+pheno_sub_nodup_ = pheno_sub_nodup[!duplicated(pheno_sub_nodup$subjectkey),]
+
+# merge VABS_MSEL with duplicates
+df_VABS_MELS_sex = merge(df_VABS_MELS_age_ok,pheno_sub_nodup_,by="subjectkey")
+
+print(paste('total subjects :',length(df_VABS_MELS_sex$subjectkey)))
+print(paste('number of missing GM DQ:',length(df_VABS_MELS_sex[is.na(df_VABS_MELS_sex$DQ_GM),'subjectkey'])))
+print(paste('number of missing FM DQ:',length(df_VABS_MELS_sex[is.na(df_VABS_MELS_sex$DQ_FM),'subjectkey'])))
+print(paste('number of missing EL DQ:',length(df_VABS_MELS_sex[is.na(df_VABS_MELS_sex$DQ_EL),'subjectkey'])))
+print(paste('number of missing RL DQ:',length(df_VABS_MELS_sex[is.na(df_VABS_MELS_sex$DQ_RL),'subjectkey'])))
+print(paste('number of missing VR DQ:',length(df_VABS_MELS_sex[is.na(df_VABS_MELS_sex$DQ_VR),'subjectkey'])))
+
+hist(df_VABS_MELS_age_ok$interview_age_MELS)
+min(df_VABS_MELS_age_ok$interview_age_MELS)
+
+# add VABS format to the dataframe
+rawnda_path = phenopath
+
+# load raw VABS data
+
+# survey 
+survey <- read.csv(file.path(rawnda_path,'survey.csv'))
+survey$edition = 2
+survey$format = "survey"
+
+# interview
+interview <- read.delim(file.path(rawnda_path,"vinelandparent_200503.txt"),sep= '\t',blank.lines.skip = FALSE, header=TRUE)
+interview$edition=2
+interview = interview[2:length(interview$edition),]
+interview$format = "interview"
+
+# edition 3
+ed_3 <-read.delim(file.path(rawnda_path,"vinland301.txt"),sep= '\t',blank.lines.skip = FALSE, header=TRUE)
+ed_3$format = "ed_3"
+ed_3$edition = 3
+ed_3 = ed_3[2:length(ed_3$format),]
+ed_3$interview_age = as.numeric(ed_3$interview_age)
+
+
+# merge 3 edtions raw data
+col2merge = c("edition" ,"collection_id","subjectkey","interview_age" ,'format')
+editions_merged = rbind(survey[,col2merge],interview[,col2merge],ed_3[,col2merge])
+
+# # merge edtion with the dataset
+ VABS_MSEL_edition = merge(df_VABS_MELS_sex, editions_merged,
+                        by.x=c("subjectkey","interview_age_VABS",'collection_id'),
+                           by.y=c("subjectkey", "interview_age","collection_id"),
+                          all.x = TRUE)
+ #survey[survey$subjectkey=='NDAR_INV2TAERYHG',]
+
+# VABS_MSEL_edition = read.csv("~/OneDrive - Fondazione Istituto Italiano Tecnologia/multiple_measures_oct22/results/reval/correct_format.csv")
+
+VABS_MSEL_edition = VABS_MSEL_edition[!duplicated(VABS_MSEL_edition), ]
+
+print(length(unique(VABS_MSEL_edition$subjectkey)))
+
+print(length(VABS_MSEL_edition$subjectkey))
+row.names(VABS_MSEL_edition) <- NULL
+
+```
+
+
+```{r}
+# saving
+data_path = file.path(work_dir,"data")
+
+# in the datapath
+write.csv(VABS_MSEL_edition,file.path(data_path,'VABS_MSEL_24_68month_oct23.csv'))
+
+# in the result path
+write.csv(VABS_MSEL_edition,file.path(resultpath,'VABS_MSEL_24_68month_oct23.csv'))
+```
+

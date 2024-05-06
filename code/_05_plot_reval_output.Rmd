@@ -1,0 +1,439 @@
+---
+title: "03_plot_reval_output"
+author: "Veronica Mandelli"
+date: "2/8/2022"
+output: html_document
+---
+
+```{r}
+# load libraries
+library(grid)
+library(lattice)
+library(ggplot2)
+library(reshape2)
+library(gridExtra)
+library(grid)
+
+#set paths
+work_dir = "..."
+codepath = file.path(work_dir,"code")
+datapath = file.path(work_dir,"results","reval_AGE")
+resultpath = file.path(work_dir,"results","reval_AGE")
+plot_path = file.path(work_dir,"plot","reval_AGE")
+
+source(file.path(codepath,"cohens_d.R"))
+
+# load files
+file_name=  "dataset_reval_clusters_oct23_AGE_grid_search.csv"
+data_mels_col_path = file.path(work_dir,"results","data_cleaning")
+MSEL_FILE = 'MSEL_allcolumns_oct23.csv'
+df_ = read.csv(file.path(datapath,file_name))
+```
+
+# get MSEL age equivalent to be plotted
+```{r}
+df_all_cols = read.csv(file.path(data_mels_col_path,MSEL_FILE))
+cols_t =c("scoresumm_vr_age_equiv","scoresumm_fm_age_equiv" ,"scoresumm_rl_age_equiv",  "scoresumm_el_age_equiv","scoresumm_vr_t_score","scoresumm_fm_t_score" ,"scoresumm_rl_t_score",  "scoresumm_el_t_score")
+df= merge(df_,df_all_cols[,c("subjectkey",cols_t)])
+```
+
+
+```{r}
+# set names of clusters 
+data = df
+for (i in (1:length(data$cluster_domain))) {
+    if (data[i, 'cluster_domain'] == '0'){
+      data[i,'clust_dom'] = "Low"
+    }
+    else if (data[i, 'cluster_domain'] == '1'){
+      data[i,'clust_dom'] = "High"
+    }
+}
+
+df=  data
+
+df$clust_dom <- factor( df$clust_dom,levels = c('High','Low')) # c('high','med','low'));
+
+# number of total subjects
+print(paste("NUMBER OF TOTAL SUBJECTS:",length(unique(df$subjectkey))))
+```
+
+
+# produce scatter plot for the input features - VABS domain standard scores and MSEL DQ
+```{r,message=FALSE, warning=FALSE}
+# set some useful list of names
+
+var_list = c(  "communicationdomain_totalb", "livingskillsdomain_totalb","socializationdomain_totalb", 
+               "motorskillsdomain_totalb","DQ_VR", "DQ_FM", "DQ_RL",  "DQ_EL")
+
+y_lim_list = list(c(25,125),c(25,125),c(25,125),c(25,125),c(0,200),c(0,200),c(0,200),c(0,200))
+
+title_list = c("Communication\n  ",
+             "Daily Living\nSkills","Socialization\n  ", "Motor\n  ", 
+             "Visual\nReception","Fine\nMotor","Receptive\nLanguage","Expressive\nLanguage")
+
+ylab_list = c('Standardized score','Standardized score','Standardized score','Standardized score',
+                 'Developmental quotient','Developmental quotient','Developmental quotient','Developmental quotient')
+
+#_________________________________TRAIN________________________________________________
+title = title 
+data2use=df[df$TR_TS=="TR",]
+plt_tr <- list()
+db_type = 'TR'
+for (j in (1:length(var_list))){
+  #define varible, color to use and titels to the plots
+  var2use = var_list[j]
+  #col_name = col_list[j]
+  color = c("#FF9933","#3399CC","#009900","#CC0099") #col_list[[j]]
+  title = title_list[j]
+  
+  p = ggplot(data = data2use, 
+             aes_string(x = 'clust_dom',
+                        y = var2use,
+                        color='clust_dom')) 
+  p = p + geom_jitter() + geom_boxplot(fill = NA, colour = "#000000", outlier.shape = NA)
+  p = p + scale_colour_manual(values = color)
+  p = p + guides(colour = FALSE)
+  p = p + xlab('') + ylab(ylab_list[[j]])
+  p = p + ylim (y_lim_list[[j]])
+  p = p + ggtitle(title_list[j]) 
+   p = p + theme_bw() 
+  p = p + theme(plot.title = element_text(hjust = 0.5))
+  ## changed here
+  p = p + theme(axis.text.x = element_text( size=10))
+  p = p + theme(axis.text.y = element_text( size=10))
+  p = p + theme(axis.text=element_text(size=10),
+                axis.title=element_text(size=12))
+  
+  print(p)
+  #ggsave(paste(plot_path,'/',db_type,'_total_',var2use,"_oct23.pdf", sep=""))
+  plt_tr[[j]] = p
+}
+
+#_________________________________TEST________________________________________________
+title = title 
+data2use=df[df$TR_TS=="TS",]
+plt_ts <- list()
+db_type = 'TS'
+for (j in (1:length(var_list))){
+  #define varible, color to use and titels to the plots
+  var2use = var_list[j]
+  #col_name = col_list[j]
+  color = c("#FF9933","#3399CC","#009900","#CC0099") #col_list[[j]]
+  title = title_list[j]
+  
+  p = ggplot(data = data2use, 
+             aes_string(x = 'clust_dom',
+                        y = var2use,
+                        color='clust_dom')) 
+  p = p + geom_jitter() + geom_boxplot(fill = NA, colour = "#000000", outlier.shape = NA)
+  p = p + scale_colour_manual(values = color)
+  p = p + guides(colour = FALSE)
+  p = p + ylim (y_lim_list[[j]])
+  p = p + xlab("") + ylab(ylab_list[[j]])
+  p = p + ggtitle(title_list[[j]]) 
+  p = p + theme_bw() 
+  p = p + theme(plot.title = element_text(hjust = 0.5))
+  ## changed here
+  p = p + theme(axis.text.x = element_text( size=10))
+  p = p + theme(axis.text.y = element_text( size=10))
+  p = p + theme(axis.text=element_text(size=10),
+                axis.title=element_text(size=12))
+  
+  print(p)
+  #ggsave(paste(plot_path,'/',db_type,'_total_',var2use,"_oct23.pdf", sep=""))
+  plt_ts[[j]] = p
+}
+```
+
+# bind together
+```{r}
+lay = rbind(c(1,2,3,4,5,6,7,8),
+            c(9,10,11,12,14,14,15,16))
+
+g = grid.arrange(
+  plt_tr[[1]],
+  plt_tr[[2]],
+  plt_tr[[3]],
+  plt_tr[[4]],
+  plt_tr[[5]],
+  plt_tr[[6]],
+  plt_tr[[7]],
+  plt_tr[[8]],
+  plt_ts[[1]],
+  plt_ts[[2]],
+  plt_ts[[3]],
+  plt_ts[[4]],
+  plt_ts[[5]],
+  plt_ts[[6]],
+  plt_ts[[7]],
+  plt_ts[[8]],
+  nrow = 2)
+g
+ggsave(file.path(plot_path,paste('sub_desc_DQ_oct23_correct.pdf',sep="")), g, width = 14 ,height = 7)
+
+```
+
+# cohen's d
+```{r}
+var2use_list = c("communicationdomain_totalb", 
+            "livingskillsdomain_totalb",
+            "socializationdomain_totalb", 
+            "motorskillsdomain_totalb",
+            "DQ_VR", 
+            "DQ_FM", 
+            "DQ_RL",  
+            "DQ_EL")
+var2use = "communicationdomain_totalb"
+
+#________________TR _______________
+data2use=subset(df,df$TR_TS=="TR")
+cohens_d_list_tr =  c()
+
+for (var2use in var2use_list) {
+C_d <- cohens_d(data2use[data2use$clust_dom=='High',var2use],
+                      data2use[data2use$clust_dom=='Low',var2use], 
+                      SIGN=FALSE)
+print(C_d)
+cohens_d_list_tr = c(cohens_d_list_tr,C_d)
+}
+#________________TS _______________
+data2use=subset(df,df$TR_TS=="TS")
+cohens_d_list_ts =  c()
+
+for (var2use in var2use_list) {
+C_d <- cohens_d(data2use[data2use$clust_dom=='High',var2use],
+                      data2use[data2use$clust_dom=='Low',var2use], 
+                      SIGN=FALSE)
+print(C_d)
+cohens_d_list_ts = c(cohens_d_list_ts,C_d)
+}
+#________________ combined _______________
+data2use=df
+cohens_d_list_combined =  c()
+
+for (var2use in var2use_list) {
+C_d <- cohens_d(data2use[data2use$clust_dom=='High',var2use],
+                      data2use[data2use$clust_dom=='Low',var2use], 
+                      SIGN=FALSE)
+print(C_d)
+cohens_d_list_combined = c(cohens_d_list_combined,C_d)
+}
+
+
+#_______________-save
+
+Cohens_d_table = data.frame(feature = var2use_list, Cohens_d_tr = cohens_d_list_tr, Cohens_d_ts = cohens_d_list_ts,  Cohens_d_combined = cohens_d_list_combined)
+Cohens_d_table
+write.csv(Cohens_d_table, file.path(resultpath,'Cohens_d.csv'))
+```
+
+# check age and sex confunders
+```{r}
+# check age and sex and other confounders
+color = c("#FF9933","#3399CC","#009900")
+### old color "#FF6666","#99CC66","#99FFFF","#E7E1Ef")
+
+data2plot = df
+# set sex as a factor
+
+data2plot$sex <- factor(data2plot$sex,levels = c("F","M"))
+# age plot
+p = ggplot(data =data2plot ,aes_string(x = 'clust_dom', y ='mean_age_round', color='clust_dom') )
+p = p + geom_jitter() + geom_boxplot(fill = NA, colour = "#000000", outlier.shape = NA)
+p = p + scale_colour_manual(values = color)
+p = p + guides(colour = FALSE)
+p = p + scale_colour_manual(values = color)
+p = p + xlab("") + ylab('months')
+p = p + ggtitle('age')
+p = p + theme_bw()
+p = p + theme(plot.title = element_text(size = 10, face = "bold",hjust = 0.5))
+p = p + theme(axis.text.x = element_text(face="bold", size=10))
+p = p + theme(axis.text.y = element_text(face="bold", size=10))
+p = p + scale_y_continuous( limits=c(0, 72))
+# sex plot
+sex =ggplot(na.omit(subset(data2plot, select = c(sex,clust_dom))), aes(x= sex,  group=clust_dom)) + 
+  geom_bar(aes(y = ..prop.., fill = factor(..x..)), stat="count") +
+  geom_text(aes( label = scales::percent(..prop..),
+                 y= ..prop.. ), stat= "count", vjust = -.5,size=2) +
+  labs(y = "Percent",fill = "gender") +
+  facet_grid(~clust_dom) +
+  scale_y_continuous(labels = scales::percent)+ ylim(0,0.87)
+sex = sex + ggtitle('Gender distribution')
+sex = sex  + theme_bw()
+sex = sex  + theme(plot.title = element_text(size = 10, face = "bold",hjust = 0.5))
+sex = sex  + theme(axis.text.x = element_text(face="bold", size=10))
+sex = sex  + theme(axis.text.y = element_text(face="bold", size=10))
+
+
+# merge age and sex in a unique figure
+lay =rbind(c(1,1,2,2,2,2))
+new_grid = grid.arrange(
+  p,sex,
+  layout_matrix = lay)
+
+ggsave(file.path(plot_path,'age_sex_NDA_trts_oct23_AGE_gridsearch.png'),new_grid)
+# check if there is difference in the percentage on F/M in the clustersgender_table
+gender_table =  table(data2plot$sex, data2plot$clust_dom)
+chisq <- chisq.test(t(gender_table))
+print(chisq)
+
+```
+
+## statistical analysis to check confounders
+```{r}
+library(car)
+var_list = c("scoresumm_compscore","ados_sa_css","ados_rrb_css",'mean_age_round')
+# prepare table to save statistic
+other_feat_mat= as.data.frame(matrix(nrow=length(var_list),ncol = 6))
+rownames(other_feat_mat) = var_list
+colnames(other_feat_mat) = c("normality","levene","test_type","t","p","CohenD")
+data2plot=df_vabs_mels_ados
+
+for (i in 1:length(var_list)){
+  var2use = var_list[i]
+#statistics
+      # t-test requirements
+      
+      # Compute Shapiro wilk test by groups --> normality
+      resp_normality = shapiro.test(data2plot[,var2use])
+      #resp_normality
+      other_feat_mat[var2use,"normality"] = resp_normality$p.value
+      
+      # Equality of variance
+      
+      # Levene's test with one independent variable
+      df2<-data2plot[complete.cases(data2plot[,c(var2use,'clust_dom')]),]
+      form2use = as.formula(sprintf("%s ~ clust_dom",var2use))
+
+      resp_levene = leveneTest(form2use, data = df2)
+      #resp_levene
+      other_feat_mat[var2use,"levene"] = resp_levene$`Pr(>F)`[1]
+      
+      if (  resp_normality$p.value >0.05 && resp_levene$`Pr(>F)`>0.05 ){
+      #  parametric: t-test
+      x = subset(data2plot, data2plot$"clust_dom" =="high")[,var2use]
+      y = subset(data2plot, data2plot$"clust_dom" =="low")[,var2use]
+      res_t = t.test(x,y,alternative = "two.sided")
+      #print(res_t)
+      other_feat_mat[var2use,"test_type"] = 't-test'
+      other_feat_mat[var2use,"t"] = res_t$statistic
+      other_feat_mat[var2use,"p"] = res_t$p.value
+      }
+      else{# non parametric: 
+      x = subset(data2plot, data2plot$"clust_dom" =="high")[,var2use]
+      y = subset(data2plot, data2plot$"clust_dom" =="low")[,var2use]
+      res_w = wilcox.test(x, y, alternative = "two.sided")
+      
+      #print(res_t)
+      other_feat_mat[var2use,"test_type"] = 'wilcox'
+      other_feat_mat[var2use,"t"] = res_w$statistic
+      other_feat_mat[var2use,"p"] = res_w$p.value}
+      
+      
+      # we also compute the cohens'd to estimate the effect size
+      CohenD <- cohens_d(data2plot[data2plot$clust_dom=='high',var2use],
+                       data2plot[data2plot$clust_dom=='low',var2use], 
+                       SIGN=FALSE)
+      
+      other_feat_mat[var2use,"CohenD"] = CohenD
+}
+other_feat_mat
+write.csv(other_feat_mat,file.path(resultpath,'other_featrures_stat_oct23_AGE_gridsearch.csv'))
+```
+
+## plot REVAL stability plot
+```{r}
+reval_val = read.csv(file.path(datapath,"val_metrics_reval_oct23_AGE_gridsearch.csv"))
+reval_val$cat = 'validation'
+
+reval_tr = read.csv(file.path(datapath,"train_metrics_reval_oct23_AGE_gridsearch.csv"))
+reval_tr$cat = 'train'
+mat = rbind(reval_tr,reval_val)
+colors = c("#cc0000","#000099")
+# spaghetti plot
+gg.spaghetti_x<-ggplot(mat, aes (x = k, y =value , group = cat, color = cat))
+gg.spaghetti_x <-gg.spaghetti_x +geom_line() + geom_point()   +
+                                 geom_errorbar(aes(ymin= value - CI, ymax= value + CI), width = 0.1, size = 0.5) +
+                                  theme_classic()+
+                                 theme(axis.text.x = element_text(size=12), axis.text.y = element_text(size=12)) +
+                                 scale_color_manual(values=colors) +xlab("Number of clusters (k)") + ylab('Normalized stability')
+                                
+                                  
+
+ggsave(file.path(plot_path,'REVAL_stabilityplot_oct23_AGE_gridsearch.pdf'),width = 6,height = 4)
+gg.spaghetti_x
+```
+
+# sigclust analysis
+```{r}
+umap_values = read.csv(file.path(datapath,"umap_values_oct23_AGE.csv"))
+colnames(umap_values) =  c("subjectkey","UMAP_1","UMAP_2","tr_ts")
+library(sigclust)
+library(dplyr)
+
+#merge umap with clust labels
+data =  merge(umap_values,df[,c("subjectkey","clust_dom")])
+
+# set option
+nreps_sim = 10000
+nreps_sigclust_repeat = 10000
+
+data$clust_dom =factor(data$clust_dom, levels = c("high",'low'))
+# run sigclust on train
+data2use_tr = data %>% filter(tr_ts=="tr") %>% select(UMAP_1,UMAP_2,clust_dom)
+rseo_sigclust_res_train = sigclust(data2use_tr[,c("UMAP_1","UMAP_2")],
+                             nsim = nreps_sim, nrep = nreps_sigclust_repeat,
+                             labflag = 1,
+                             label = data2use_tr[,"clust_dom"],
+                             icovest=2)
+p_train = ggplot(data=data2use_tr, aes(x=UMAP_1,y=UMAP_2)) +
+    geom_density_2d_filled() + 
+    geom_point(data=data2use_tr, aes(colour=clust_dom), alpha = 0.5,size = 0.5) +
+   scale_y_continuous( limits=c(6, 17)) + 
+  scale_x_continuous( limits=c(-1,10)) + 
+  scale_colour_manual(values = color) + 
+  theme_bw() +
+  xlab(" UMAP 1") + ylab('UMAP 2')+ggtitle('Train')+
+  theme(plot.title = element_text(size = 20, face = "bold",hjust = 0.5))#+
+  #theme(axis.text.x = element_text(face="bold", size=15))+
+  #theme(axis.text.y = element_text(face="bold", size=15))
+  
+p_train
+
+
+p_val_train = (sum(rseo_sigclust_res_train@simcindex<=rseo_sigclust_res_train@xcindex)+1)/(nreps_sim+1)
+print(p_val_train)
+
+
+# run sigclust on test
+data2use_val = data %>% filter(tr_ts=="ts") %>% select(UMAP_1,UMAP_2,clust_dom)
+rseo_sigclust_res_test = sigclust(data2use_val[,c("UMAP_1","UMAP_2")],
+                             nsim = nreps_sim, nrep = nreps_sigclust_repeat,
+                             labflag = 1,
+                             label = data2use_val[,"clust_dom"],
+                             icovest=2)
+p_test = ggplot(data=data2use_val, aes(x=UMAP_1,y=UMAP_2)) +
+    geom_density_2d_filled() + 
+    geom_point(data=data2use_val, aes(colour=clust_dom), alpha = 0.5,size = 0.5)+
+    scale_y_continuous( limits=c(6, 17)) + 
+  scale_x_continuous( limits=c(-1, 10))+ 
+  scale_colour_manual(values = color)+
+  theme_bw() +
+  xlab(" UMAP 1") + ylab('UMAP 2')+ggtitle('Validation')+
+  theme(plot.title = element_text(size = 20, face = "bold",hjust = 0.5)) #+
+  #theme(axis.text.x = element_text(face="bold", size=15))+
+  #theme(axis.text.y = element_text(face="bold", size=15))
+p_test
+
+#rseo_sigclust_res_test
+p_val_test = (sum(rseo_sigclust_res_test@simcindex<=rseo_sigclust_res_test@xcindex)+1)/(nreps_sim+1)
+print(p_val_test)
+
+library(ggpubr)
+umap_tr_ts = ggarrange(p_train, p_test, nrow=1, common.legend = TRUE, legend="bottom")
+umap_tr_ts
+
+ggsave(file.path(plot_path,'SigClust_MultMeas_oct23_AGE_gridsearch.pdf'), umap_tr_ts, width = 7 ,height = 4)
+```
+
