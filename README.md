@@ -10,6 +10,11 @@ Activate the environment in the folder and then Install all the libraries with:
 
 > pip install -r requirements.txt
 
+The stratification analysis also requires the `reval` Python library.
+
+  + **reval** (https://github.com/IIT-LAND/reval_clustering) - Used for stability-based relative clustering validation analyses.
+
+
 To run the R code, please use:
 
 > R >=4.0
