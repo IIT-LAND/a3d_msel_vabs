@@ -14,6 +14,9 @@ The stratification analysis also requires the `reval` Python library.
 
   + **reval** (https://github.com/IIT-LAND/reval_clustering) - Used for stability-based relative clustering validation analyses.
 
+The PLS analysis requires this toolbox in MATLAB 
+
++ **PLS toolbox** (https://www.rotman-baycrest.on.ca/index.php?section=84)
 
 To run the R code, please use:
 
